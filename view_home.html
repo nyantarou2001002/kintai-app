@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ホーム画面</title>
+    <!-- Bootstrap 5 CDN -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css"
+    />
+    <!-- カスタムスタイル -->
+    <style>
+      body {
+        background-color: #ffffff;
+        color: #1e64aa;
+      }
+      .container-custom {
+        background-color: #ebf3ff;
+        padding: 2rem;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      .header-title {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #1e64aa;
+      }
+      .section-title {
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+        color: #1e64aa;
+      }
+      /* テーブル */
+      .table thead {
+        background-color: #285ac8;
+        color: #ffffff;
+      }
+      .table-striped tbody tr:nth-of-type(odd) {
+        background-color: #ffffff;
+      }
+      .table-striped tbody tr:nth-of-type(even) {
+        background-color: #ebf3ff;
+      }
+      /* ボタン */
+      .btn-primary {
+        background-color: #285ac8;
+        border-color: #285ac8;
+      }
+      .btn-primary:hover {
+        background-color: #2864f0;
+        border-color: #2864f0;
+      }
+      .btn-danger:hover {
+        opacity: 0.8;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container container-custom my-4">
+      <!-- ヘッダー -->
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <span class="header-title">管理者画面</span>
+        </div>
+        <div>
+          <!-- kintai_home.htmlに戻るボタンを左側に追加 -->
+
+          <a href="view_report.html" class="btn btn-primary"
+            >月次勤怠レポートを見る</a
+          >
+          <a href="index.html" class="btn btn-secondary me-2">打刻画面に戻る</a>
+        </div>
+      </div>
+
+      <!-- 従業員一覧 -->
+      <div class="mb-4">
+        <h3 class="section-title">従業員一覧</h3>
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th>従業員番号</th>
+              <th>名前</th>
+              <th>職種</th>
+              <th>注</th>
+              <!-- 新規追加の列 -->
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?
+              var record = getEmployees();
+              for (var i = 0; i <= record.length - 1; i++) {
+                var id = record[i]["id"];
+                var name = record[i]["name"];
+                // 新しい指標：有給休暇付与日からの出勤回数チェックと、出勤上限超過チェック
+                var indicator = "";
+                // ※「attendanceCountFromGrant」は、有給休暇付与日から9ヶ月以降の出勤回数（別途サーバー側で算出してセットしている前提）
+                if (!(record[i].paidVacationGrantDate && record[i].attendanceCountFromGrant < 5) && 
+                    !(record[i].attendanceCountCurrentMonth >
+            record[i].maxAttendanceCount)) { indicator = '<i
+              class="fa-solid fa-check"
+              style="color: limegreen"
+            ></i
+            >'; } else { indicator = '<i
+              class="fa-solid fa-circle-exclamation"
+              style="color: red"
+            ></i
+            >'; } ?>
+            <tr id="row-<?= id ?>">
+              <td>
+                <a href="<?= getAppUrl() ?>?empId=<?= id ?>"><?= id ?></a>
+              </td>
+              <td><?= name ?></td>
+              <td><?= record[i]["job"] ? record[i]["job"] : "" ?></td>
+              <td><?!= indicator ?></td>
+              <td>
+                <button
+                  class="btn btn-danger btn-sm"
+                  onclick="confirmDelete('<?= id ?>', '<?= name ?>')"
+                >
+                  削除
+                </button>
+              </td>
+            </tr>
+            <? } ?>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 打刻不整合一覧 -->
+      <div class="mb-4">
+        <h3 class="section-title">打刻不整合一覧</h3>
+        <table class="table table-bordered">
+          <thead class="table-dark">
+            <tr>
+              <th>従業員ID</th>
+              <th>従業員名</th>
+              <th>日付</th>
+              <th>内容</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?
+              var inconstList = getInconsistencyList();
+              if(inconstList.length == 0) {
+              ?>
+            <tr>
+              <td colspan="4" class="text-center">不整合はありません</td>
+            </tr>
+            <?
+              } else {
+                for(var j=0; j<inconstList.length; j++) {
+              ?>
+            <tr>
+              <td><?= inconstList[j].empId ?></td>
+              <td><?= inconstList[j].empName ?></td>
+              <td><?= inconstList[j].date ?></td>
+              <td><?= inconstList[j].message ?></td>
+            </tr>
+            <? 
+                }
+              }
+              ?>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 有給休暇申請一覧セクション（view_home.html 内：新しい従業員追加フォームの上部に配置） -->
+      <!-- <div class="mb-4">
+          <h3 class="section-title">有給休暇申請一覧</h3>
+          <table class="table table-bordered" id="pv_request_table">
+            <thead class="table-dark">
+              <tr>
+                <th>従業員番号</th>
+                <th>従業員名</th>
+                <th>対象日</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?
+                var requests = getPaidVacationRequests();
+                if (requests.length == 0) {
+              ?>
+              <tr><td colspan="4" class="text-center">申請はありません</td></tr>
+              <?
+                } else {
+                  for (var i = 0; i < requests.length; i++) {
+                    var req = requests[i];
+              ?>
+              <tr id="req-<?= req.requestId ?>">
+                <td><?= req.empId ?></td>
+                <td><?= req.empName ?></td>
+                <td><?= req.targetDate ?></td>
+                <td>
+                  <button class="btn btn-success btn-sm" onclick="approveRequest('<?= req.requestId ?>')">受諾</button>
+                  <button class="btn btn-danger btn-sm" onclick="rejectRequest('<?= req.requestId ?>')">拒否</button>
+                </td>
+              </tr>
+              <? 
+                  }
+                }
+              ?>
+            </tbody>
+          </table>
+        </div> -->
+
+      <script>
+        function approveRequest(requestId) {
+          google.script.run
+            .withSuccessHandler(function (response) {
+              var res = JSON.parse(response);
+              alert(res.message);
+              var row = document.getElementById("req-" + requestId);
+              if (row) row.remove();
+              // 対象従業員の詳細画面にリダイレクトして最新のタイムレコーダー履歴を表示
+              window.location.href =
+                "<?= getAppUrl() ?>?empId=" + res.empId + "&month=" + res.month;
+            })
+            .approvePaidVacation(requestId);
+        }
+
+        function rejectRequest(requestId) {
+          google.script.run
+            .withSuccessHandler(function (response) {
+              alert(response);
+              var row = document.getElementById("req-" + requestId);
+              if (row) row.remove();
+            })
+            .rejectPaidVacation(requestId);
+        }
+      </script>
+
+      <!-- 新しい従業員追加フォーム -->
+      <div class="mb-4">
+        <h3 class="section-title">新しい従業員を追加</h3>
+        <form id="addEmployeeForm" onsubmit="handleAddEmployee(event)">
+          <div class="mb-3">
+            <label for="employee_name" class="form-label">従業員名:</label>
+            <input
+              type="text"
+              class="form-control"
+              id="employee_name"
+              name="employee_name"
+              required
+            />
+          </div>
+          <div class="mb-3">
+            <label for="employee_job" class="form-label">職種:</label>
+            <select
+              class="form-select"
+              id="employee_job"
+              name="employee_job"
+              required
+            >
+              <option value="">-- 選択してください --</option>
+              <?
+                  var jobTypes = getJobTypes();
+                  for(var i = 0; i < jobTypes.length; i++) {
+                ?>
+              <option value="<?= jobTypes[i].code ?>">
+                <?= jobTypes[i].name ?>
+              </option>
+              <?
+                  }
+                ?>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="maxAttendanceCount" class="form-label"
+              >出勤回数上限:</label
+            >
+            <input
+              type="number"
+              class="form-control"
+              id="maxAttendanceCount"
+              name="maxAttendanceCount"
+              min="0"
+              required
+            />
+          </div>
+          <!-- 有給休暇上限 & 有給休暇付与日を横に並べる -->
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label for="paidVacationLimit" class="form-label"
+                >有給休暇上限:</label
+              >
+              <input
+                type="number"
+                class="form-control"
+                id="paidVacationLimit"
+                name="paidVacationLimit"
+                min="0"
+                required
+              />
+            </div>
+            <div class="col-md-6 mb-3">
+              <label for="paidVacationGrantDate" class="form-label"
+                >有給休暇付与日:</label
+              >
+              <input
+                type="date"
+                class="form-control"
+                id="paidVacationGrantDate"
+                name="paidVacationGrantDate"
+                required
+              />
+            </div>
+          </div>
+          <button type="submit" class="btn btn-success">追加</button>
+        </form>
+        <div id="employee_add_message" class="mt-2"></div>
+      </div>
+
+      <!-- 新しい職種追加フォーム -->
+      <div class="mb-4">
+        <h3 class="section-title">新しい職種を追加</h3>
+        <form id="addJobTypeForm" onsubmit="handleAddJobType(event)">
+          <div class="mb-3">
+            <label for="job_type_code" class="form-label"
+              >職種コード (2文字大文字):</label
+            >
+            <input
+              type="text"
+              class="form-control"
+              id="job_type_code"
+              name="job_type_code"
+              required
+              maxlength="2"
+              pattern="[A-Z]{2}"
+            />
+          </div>
+          <div class="mb-3">
+            <label for="job_type_name" class="form-label">職種名:</label>
+            <input
+              type="text"
+              class="form-control"
+              id="job_type_name"
+              name="job_type_name"
+              required
+            />
+          </div>
+          <button type="submit" class="btn btn-success">職種を追加</button>
+        </form>
+        <div id="jobtype_add_message" class="mt-2"></div>
+      </div>
+
+      <!-- 職種一覧 -->
+      <div class="mb-4">
+        <h3 class="section-title">職種一覧</h3>
+        <table class="table table-striped">
+          <thead class="table-dark">
+            <tr>
+              <th>職種コード</th>
+              <th>職種名</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?
+              var jobTypes = getJobTypes();
+              if(jobTypes.length == 0) {
+              ?>
+            <tr>
+              <td colspan="2" class="text-center">
+                職種は登録されていません。
+              </td>
+            </tr>
+            <?
+              } else {
+                for(var i = 0; i < jobTypes.length; i++) {
+              ?>
+            <tr>
+              <td><?= jobTypes[i].code ?></td>
+              <td><?= jobTypes[i].name ?></td>
+            </tr>
+            <?
+                }
+              }
+              ?>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- オーナーのメールアドレス設定 -->
+      <!-- <div class="mb-4">
+          <h3 class="section-title">オーナーのメールアドレスを設定</h3>
+          <form id="setOwnerEmailForm" onsubmit="handleSetOwnerEmail(event)">
+            <div class="mb-3">
+              <label for="owner_email" class="form-label">オーナーのメールアドレス:</label>
+              <input type="email" class="form-control" id="owner_email" name="owner_email" required>
+            </div>
+            <button type="submit" class="btn btn-success">設定</button>
+          </form>
+          <div id="owner_email_message" class="mt-2"></div>
+        </div> -->
+
+      <!-- オーナーのメールアドレス表示 -->
+      <!-- <div class="mb-4">
+          <h3 class="section-title">現在のオーナーのメールアドレス</h3>
+          <p id="current_owner_email" class="form-text"></p>
+        </div>
+  
+        <script>
+          // ページロード時にオーナーのメールアドレスを表示
+          window.addEventListener("load", function() {
+            google.script.run.withSuccessHandler(function(response) {
+              document.getElementById("current_owner_email").innerText = response ? "現在設定されているメールアドレス: " + response : "まだ設定されていません";
+            }).getOwnerEmail();
+          });
+        </script> -->
+
+      <!-- パスワード設定 -->
+      <!-- <div class="mb-4">
+          <h3 class="section-title">オーナーのパスワードを設定</h3>
+          <form id="setOwnerPasswordForm" onsubmit="handleSetOwnerPassword(event)">
+            <div class="mb-3">
+              <label for="owner_password" class="form-label">新しいパスワード:</label>
+              <input type="password" class="form-control" id="owner_password" name="owner_password" required>
+            </div>
+            <button type="submit" class="btn btn-success">パスワードを設定</button>
+          </form>
+          <div id="owner_password_message" class="mt-2"></div>
+        </div> -->
+
+      <script>
+        // 有給休暇数更新処理
+        function handlePaidVacationForm(event) {
+          event.preventDefault();
+          var days = document.getElementById("paidVacationDays").value;
+          google.script.run
+            .withSuccessHandler(function (response) {
+              document.getElementById("paidVacationMessage").innerText =
+                response;
+            })
+            .setPaidVacationDays(parseInt(days));
+        }
+        // 出勤回数上限更新処理
+        function handleAttendanceLimitForm(event) {
+          event.preventDefault();
+          var count = document.getElementById("maxAttendanceCount").value;
+          google.script.run
+            .withSuccessHandler(function (response) {
+              document.getElementById("attendanceLimitMessage").innerText =
+                response;
+            })
+            .setMaxAttendanceCount(parseInt(count));
+        }
+        // 初回設定読み込み
+        function loadSettings() {
+          google.script.run
+            .withSuccessHandler(function (days) {
+              document.getElementById("paidVacationDays").value = days;
+            })
+            .getPaidVacationDays();
+
+          google.script.run
+            .withSuccessHandler(function (count) {
+              document.getElementById("maxAttendanceCount").value = count;
+            })
+            .getMaxAttendanceCount();
+        }
+        window.addEventListener("load", function () {
+          // ※ loadOwnerEmail()がある場合はそちらも呼び出す
+          loadSettings();
+        });
+
+        // 削除ボタンの処理
+        function confirmDelete(empId, empName) {
+          if (confirm(`${empName} (ID: ${empId}) を削除しますか？`)) {
+            google.script.run
+              .withSuccessHandler(function (response) {
+                if (response.success) {
+                  // テーブルから削除
+                  var row = document.getElementById(`row-${empId}`);
+                  if (row) row.remove();
+                  alert("削除に成功しました！！");
+                } else {
+                  alert("削除に成功しました！！");
+                }
+              })
+              .deleteEmployee(empId);
+          }
+        }
+
+        // 従業員追加フォームの処理
+        function handleAddEmployee(event) {
+          event.preventDefault();
+          var empName = document.getElementById("employee_name").value;
+          var empJob = document.getElementById("employee_job").value;
+          var maxAttendanceCount =
+            document.getElementById("maxAttendanceCount").value;
+          var paidVacationLimit =
+            document.getElementById("paidVacationLimit").value;
+          var paidVacationGrantDate = document.getElementById(
+            "paidVacationGrantDate"
+          ).value;
+          if (
+            !empName ||
+            !empJob ||
+            maxAttendanceCount === "" ||
+            paidVacationLimit === "" ||
+            !paidVacationGrantDate
+          ) {
+            document.getElementById("employee_add_message").innerText =
+              "全てのフィールドを正しく入力してください";
+            return;
+          }
+          document.getElementById("employee_add_message").innerText =
+            "追加中...";
+
+          google.script.run
+            .withSuccessHandler(function (response) {
+              var result = JSON.parse(response);
+              if (result.success) {
+                document.getElementById("employee_add_message").innerText =
+                  "従業員名「" + result.empName + "」を追加しました。";
+              } else {
+                document.getElementById("employee_add_message").innerText =
+                  result.message;
+              }
+            })
+            .addEmployee(
+              empName,
+              empJob,
+              parseInt(maxAttendanceCount),
+              parseInt(paidVacationLimit),
+              paidVacationGrantDate
+            );
+        }
+
+        // 職種追加フォームの処理
+        function handleAddJobType(event) {
+          event.preventDefault();
+          var code = document.getElementById("job_type_code").value.trim();
+          var name = document.getElementById("job_type_name").value.trim();
+          if (!/^[A-Z]{2}$/.test(code)) {
+            document.getElementById("jobtype_add_message").innerText =
+              "職種コードは2文字の大文字アルファベットで入力してください。";
+            return;
+          }
+          if (!name) {
+            document.getElementById("jobtype_add_message").innerText =
+              "職種名を入力してください。";
+            return;
+          }
+          document.getElementById("jobtype_add_message").innerText =
+            "追加中...";
+          google.script.run
+            .withSuccessHandler(function (response) {
+              document.getElementById("jobtype_add_message").innerText =
+                response;
+              document.getElementById("addJobTypeForm").reset();
+            })
+            .addJobType(code, name);
+        }
+        // オーナーのメールアドレスを設定
+        function handleSetOwnerEmail(event) {
+          event.preventDefault();
+          var ownerEmail = document.getElementById("owner_email").value;
+          document.getElementById("owner_email_message").innerText =
+            "設定中...";
+
+          google.script.run
+            .withSuccessHandler(function (response) {
+              document.getElementById("owner_email_message").innerText =
+                response;
+            })
+            .setOwnerEmail(ownerEmail);
+        }
+
+        // オーナーのパスワード設定
+        function handleSetOwnerPassword(event) {
+          event.preventDefault();
+          var ownerPassword = document.getElementById("owner_password").value;
+          document.getElementById("owner_password_message").innerText =
+            "設定中...";
+
+          google.script.run
+            .withSuccessHandler(function (response) {
+              document.getElementById("owner_password_message").innerText =
+                response;
+            })
+            .setOwnerPassword(ownerPassword);
+        }
+      </script>
+    </div>
+  </body>
+</html>

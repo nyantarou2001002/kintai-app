@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>勤怠管理画面</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+  </head>
+  <style>
+    body {
+      background-color: #ffffff;
+      color: #1e64aa;
+    }
+    .container-custom {
+      background-color: #ebf3ff;
+      padding: 2rem;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    .header-title {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #1e64aa;
+    }
+    .section-title {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+      color: #1e64aa;
+    }
+  </style>
+  <script>
+    // 選択された従業員IDをサーバーに保存する関数
+    function selectEmployee() {
+      var empSelect = document.getElementById("employeeSelect");
+      if (empSelect.value === "") {
+        alert("従業員を選択してください");
+        return false;
+      }
+      google.script.run.setSelectedEmployee(empSelect.value);
+      return true;
+    }
+
+    // 出勤・退勤の場合：現在の時刻を記録し、結果のメッセージを表示する
+    function recordImmediate(type) {
+      if (!selectEmployee()) return;
+      var now = new Date();
+      var year = now.getFullYear();
+      var month = (now.getMonth() + 1).toString().padStart(2, "0");
+      var day = now.getDate().toString().padStart(2, "0");
+      var hours = now.getHours().toString().padStart(2, "0");
+      var minutes = now.getMinutes().toString().padStart(2, "0");
+      var target_date = year + "-" + month + "-" + day;
+      var target_time = hours + ":" + minutes;
+      var record = {
+        target_date: target_date,
+        target_time: target_time,
+        target_type: type,
+      };
+      google.script.run
+        .withSuccessHandler(function (response) {
+          document.getElementById("wr_submit_message").innerHTML = response;
+        })
+        .saveWorkRecord(record);
+    }
+
+    // 有給休暇の場合：ユーザー入力の対象日・対象時刻を使用して記録し、結果メッセージを表示する
+    function handlePaidVacationSubmit(formObject) {
+      if (!selectEmployee()) return false;
+      var target_date = formObject.target_date.value;
+      var target_time = formObject.target_time.value;
+      var record = {
+        target_date: target_date,
+        target_time: target_time,
+        target_type: "paid_vacation",
+      };
+      google.script.run
+        .withSuccessHandler(function (response) {
+          document.getElementById("pv_submit_message").innerHTML = response;
+        })
+        .saveWorkRecord(record);
+      return false; // フォームの自動送信を防ぐ
+    }
+  </script>
+  <body>
+    <div class="container container-custom my-4">
+        <!-- ヘッダー -->
+        <div class="text-center mb-4">
+          <h1 class="header-title">勤怠管理システム</h1>
+          <p class="mb-4">ホーム画面です。従業員を選択し、打刻を行ってください。</p>
+          <a class="btn btn-primary btn-lg" href="login.html">管理者画面に移動</a>
+        </div>
+        
+        <!-- 従業員選択ドロップダウン -->
+        <div class="mb-4">
+          <label for="employeeSelect" class="form-label">従業員を選択:</label>
+          <select id="employeeSelect" class="form-select">
+            <option value="">-- 従業員を選択してください --</option>
+            <? var employees = getEmployees();
+               for (var i = 0; i < employees.length; i++) {
+                 var emp = employees[i];
+            ?>
+            <option value="<?= emp.id ?>"><?= emp.name ?> (<?= emp.job ?>)</option>
+            <? } ?>
+          </select>
+        </div>
+        
+        <!-- 出勤・退勤セクション -->
+        <div class="mb-4 text-center">
+          <h3 class="section-title">今すぐ打刻</h3>
+          <div class="d-flex justify-content-center gap-3">
+            <button class="btn btn-success" onclick="recordImmediate('clock_in')">出勤</button>
+            <button class="btn btn-warning" onclick="recordImmediate('clock_out')">退勤</button>
+          </div>
+          <div id="wr_submit_message" class="text-center mt-2"></div>
+        </div>
+        
+        <!-- 有給休暇登録セクション -->
+        <div class="mb-4">
+          <h3 class="section-title">有給休暇登録</h3>
+          <form onsubmit="return handlePaidVacationSubmit(this)">
+            <div class="mb-3">
+              <label for="target_date" class="form-label">対象日:</label>
+              <input type="date" class="form-control" name="target_date" required>
+            </div>
+            <!-- 有給の場合は時刻入力は不要なので固定で "00:00" を設定 -->
+            <button type="submit" class="btn btn-primary">登録する</button>
+          </form>
+          <div id="pv_submit_message" class="text-center mt-2"></div>
+        </div>
+  
+        <script>
+          function handlePaidVacationSubmit(formObject) {
+            if (!selectEmployee()) return false;
+            var target_date = formObject.target_date.value;
+            var record = {
+              target_date: target_date,
+              target_time: "00:00", // 有給の場合は固定時刻
+              target_type: "paid_vacation"
+            };
+            // saveWorkRecord を呼び出すことで、「打刻履歴」シートに直接登録
+            google.script.run.withSuccessHandler(function(response) {
+              document.getElementById('pv_submit_message').innerHTML = response;
+            }).saveWorkRecord(record);
+            return false; // 自動送信を防ぐ
+          }
+        </script>
+  
+  
+      <!-- Bootstrap JS -->
+      <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>
+<!-- static/index.html -->
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>勤怠管理画面</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background-color: #ffffff;
+      color: #1e64aa;
+    }
+    .container-custom {
+      background-color: #ebf3ff;
+      padding: 2rem;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    .header-title {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #1e64aa;
+    }
+    .section-title {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+      color: #1e64aa;
+    }
+  </style>
+</head>
+<body>
+  <div class="container container-custom my-4">
+    <!-- ヘッダー -->
+    <div class="text-center mb-4">
+      <h1 class="header-title">勤怠管理システム</h1>
+      <p class="mb-4">ホーム画面です。従業員を選択し、打刻を行ってください。</p>
+      <a class="btn btn-primary btn-lg" href="admin.html">管理者画面に移動</a>
+    </div>
+
+    <!-- 従業員選択ドロップダウン -->
+    <div class="mb-4">
+      <label for="employeeSelect" class="form-label">従業員を選択:</label>
+      <select id="employeeSelect" class="form-select">
+        <option value="">-- 従業員を選択してください --</option>
+      </select>
+    </div>
+
+    <!-- 出勤・退勤セクション -->
+    <div class="mb-4 text-center">
+      <h3 class="section-title">今すぐ打刻</h3>
+      <div class="d-flex justify-content-center gap-3">
+        <button class="btn btn-success" onclick="recordImmediate('clock_in')">出勤</button>
+        <button class="btn btn-warning" onclick="recordImmediate('clock_out')">退勤</button>
+      </div>
+      <div id="wr_submit_message" class="text-center mt-2"></div>
+    </div>
+
+    <!-- 有給休暇登録セクション -->
+    <div class="mb-4">
+      <h3 class="section-title">有給休暇登録</h3>
+      <form onsubmit="return handlePaidVacationSubmit(this)">
+        <div class="mb-3">
+          <label for="target_date" class="form-label">対象日:</label>
+          <input type="date" class="form-control" name="target_date" required>
+        </div>
+        <button type="submit" class="btn btn-primary">登録する</button>
+      </form>
+      <div id="pv_submit_message" class="text-center mt-2"></div>
+    </div>
+  </div>
+
+  <script>
+    // 従業員情報を取得してドロップダウンに反映
+    function fetchEmployees() {
+      fetch('/api/employees')
+        .then(response => response.json())
+        .then(data => {
+          const select = document.getElementById("employeeSelect");
+          data.forEach(emp => {
+            const option = document.createElement("option");
+            option.value = emp.id;
+            option.text = `${emp.name} (${emp.job})`;
+            select.add(option);
+          });
+        })
+        .catch(error => console.error('Error fetching employees:', error));
+    }
+    fetchEmployees();
+
+    // 従業員選択のバリデーション
+    function selectEmployee() {
+      const empSelect = document.getElementById("employeeSelect");
+      if (empSelect.value === "") {
+        alert("従業員を選択してください");
+        return false;
+      }
+      return true;
+    }
+
+    // 出勤・退勤ボタンの処理
+    function recordImmediate(type) {
+      if (!selectEmployee()) return;
+      const empSelect = document.getElementById("employeeSelect");
+      const employeeId = empSelect.value;
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = (now.getMonth() + 1).toString().padStart(2, "0");
+      const day = now.getDate().toString().padStart(2, "0");
+      const hours = now.getHours().toString().padStart(2, "0");
+      const minutes = now.getMinutes().toString().padStart(2, "0");
+      const target_date = `${year}-${month}-${day}`;
+      const target_time = `${hours}:${minutes}`;
+      const record = {
+        employee_id: employeeId,
+        target_date: target_date,
+        target_time: target_time,
+        target_type: type
+      };
+      fetch('/api/saveWorkRecord', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(record)
+      })
+      .then(response => response.text())
+      .then(data => {
+        document.getElementById("wr_submit_message").innerHTML = data;
+      })
+      .catch(error => console.error('Error saving work record:', error));
+    }
+
+    // 有給休暇登録フォームの処理
+    function handlePaidVacationSubmit(formObject) {
+      if (!selectEmployee()) return false;
+      const empSelect = document.getElementById("employeeSelect");
+      const employeeId = empSelect.value;
+      const target_date = formObject.target_date.value;
+      const record = {
+        employee_id: employeeId,
+        target_date: target_date,
+        target_time: "00:00", // 有給の場合は固定時刻
+        target_type: "paid_vacation"
+      };
+      fetch('/api/saveWorkRecord', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(record)
+      })
+      .then(response => response.text())
+      .then(data => {
+        document.getElementById("pv_submit_message").innerHTML = data;
+      })
+      .catch(error => console.error('Error saving vacation record:', error));
+      return false; // フォームの自動送信を防ぐ
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
