@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ログイン画面</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        background-color: #f0f8ff;
+        color: #1e64aa;
+      }
+      .container-custom {
+        background-color: #ebf3ff;
+        padding: 2rem;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        max-width: 400px;
+        margin-top: 100px;
+      }
+      .header-title {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #1e64aa;
+      }
+      .btn-primary {
+        background-color: #285ac8;
+        border-color: #285ac8;
+      }
+      .btn-primary:hover {
+        background-color: #2864f0;
+        border-color: #2864f0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container container-custom">
+      <div class="text-center mb-4">
+        <h1 class="header-title">ログイン画面</h1>
+        <p>管理者としてログインしてください。</p>
+      </div>
+
+      <!-- ログインフォーム -->
+      <form id="loginForm" onsubmit="handleLogin(event)">
+        <div class="mb-3">
+          <label for="adminPassword" class="form-label">パスワード:</label>
+          <input type="password" class="form-control" id="adminPassword" required />
+        </div>
+        <button type="submit" class="btn btn-primary w-100">ログイン</button>
+      </form>
+
+      <div id="loginMessage" class="mt-3 text-center" style="color:red;"></div>
+    </div>
+
+    <script>
+      function handleLogin(e) {
+        e.preventDefault();
+        const password = document.getElementById("adminPassword").value;
+
+        fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: password })
+        })
+        .then(response => {
+          if (!response.ok) {
+            // 401など → パスワード不一致
+            throw new Error("ログインに失敗しました");
+          }
+          return response.text();
+        })
+        .then(data => {
+          // 成功 → view_home.html にリダイレクト
+          window.location.href = "view_home.html";
+        })
+        .catch(error => {
+          // 失敗 → エラーメッセージを表示
+          document.getElementById("loginMessage").innerText = error.message;
+        });
+      }
+    </script>
+
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>

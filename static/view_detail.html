@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>詳細画面</title>
+  <!-- Bootstrap 5 CDN -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css" />
+  <style>
+    body {
+      background-color: #ffffff;
+      color: #1e64aa;
+    }
+    .container-custom {
+      background-color: #ebf3ff;
+      padding: 2rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    .header-title {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #1e64aa;
+    }
+    .section-title {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+      color: #1e64aa;
+    }
+  </style>
+</head>
+<body>
+  <div class="container container-custom my-4">
+    <h1 class="header-title">従業員詳細</h1>
+    <div id="employeeDetail">
+      <!-- 従業員詳細情報がここに表示される -->
+      <p>読み込み中...</p>
+    </div>
+
+    <!-- 月選択入力を追加 -->
+    <div class="mb-3">
+      <label for="monthSelect" class="form-label">表示する月:</label>
+      <input type="month" id="monthSelect" class="form-control" onchange="fetchTimeRecords()">
+    </div>
+
+    <!-- タイムレコーダー履歴表示部分 -->
+    <div id="timeRecords" class="mt-4">
+      <h3 class="section-title" id="timeRecordsHeader">タイムレコーダー履歴</h3>
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th>種別</th>
+            <th>対象日時</th>
+            <th>メモ</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="timeRecordsBody">
+          <!-- タイムレコーダー記録がここに追加される -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 新規タイムレコーダー記録フォーム（省略／既存） -->
+    <div id="newTimeRecord" class="mt-4">
+      <h3 class="section-title">新規タイムレコーダー記録</h3>
+      <form id="newTimeRecordForm" onsubmit="handleNewTimeRecord(event)">
+        <div class="mb-3">
+          <label for="record_date" class="form-label">対象日:</label>
+          <input type="date" id="record_date" class="form-control" required>
+        </div>
+        <div class="mb-3">
+          <label for="record_time" class="form-label">対象時刻:</label>
+          <input type="time" id="record_time" class="form-control" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">種別:</label>
+          <div>
+            <div class="form-check form-check-inline">
+              <input type="radio" name="record_type" value="clock_in" id="clock_in" class="form-check-input" required>
+              <label for="clock_in" class="form-check-label">出勤</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input type="radio" name="record_type" value="clock_out" id="clock_out" class="form-check-input">
+              <label for="clock_out" class="form-check-label">退勤</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input type="radio" name="record_type" value="paid_vacation" id="paid_vacation" class="form-check-input">
+              <label for="paid_vacation" class="form-check-label">有給休暇</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input type="radio" name="record_type" value="break_start" id="break_start" class="form-check-input">
+              <label for="break_start" class="form-check-label">休憩開始</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input type="radio" name="record_type" value="break_end" id="break_end" class="form-check-input">
+              <label for="break_end" class="form-check-label">休憩終了</label>
+            </div>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-success">記録を追加</button>
+      </form>
+    </div>
+
+    <div class="text-center mt-4">
+      <a href="view_home.html" class="btn btn-primary">ホーム画面に戻る</a>
+    </div>
+  </div>
+
+  <script>
+    // URLクエリパラメータから指定のパラメータを取得する関数
+    function getQueryParam(param) {
+      const params = new URLSearchParams(window.location.search);
+      return params.get(param);
+    }
+
+    // 現在の年月を "YYYY-MM" 形式で返す関数
+    function getCurrentMonth() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = ("0" + (now.getMonth() + 1)).slice(-2);
+      return `${year}-${month}`;
+    }
+
+    // ページ読み込み時に月選択欄に現在の月を設定（もし値が空なら）
+    window.addEventListener("load", function() {
+      const monthSelect = document.getElementById("monthSelect");
+      if (!monthSelect.value) {
+        monthSelect.value = getCurrentMonth();
+      }
+      fetchEmployeeDetail();
+      fetchTimeRecords();
+    });
+
+    // 従業員詳細情報の取得（既存）
+    function fetchEmployeeDetail() {
+      const empNumber = getQueryParam("empNumber");
+      if (!empNumber) {
+        document.getElementById("employeeDetail").innerText = "従業員番号が指定されていません";
+        return;
+      }
+      fetch(`/api/employeeDetail?empNumber=${empNumber}`)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error("従業員情報の取得に失敗しました");
+          }
+          return response.json();
+        })
+        .then(emp => {
+          const detailDiv = document.getElementById("employeeDetail");
+          const grantDate = emp.paid_vacation_grant_date ? emp.paid_vacation_grant_date.split("T")[0] : "";
+          detailDiv.innerHTML = `
+            <p><strong>従業員番号:</strong> ${emp.employee_number}</p>
+            <p><strong>名前:</strong> ${emp.name}</p>
+            <p><strong>職種:</strong> ${emp.job} (${emp.job_code})</p>
+            <p><strong>出勤回数上限:</strong> ${emp.max_attendance_count}</p>
+            <p><strong>有給休暇上限:</strong> ${emp.paid_vacation_limit}</p>
+            <p><strong>有給休暇付与日:</strong> ${grantDate}</p>
+          `;
+        })
+        .catch(error => {
+          document.getElementById("employeeDetail").innerText = error.message;
+        });
+    }
+
+    // タイムレコーダー履歴の取得
+    function fetchTimeRecords() {
+      const empNumber = getQueryParam("empNumber");
+      if (!empNumber) return;
+      const month = document.getElementById("monthSelect").value;
+      let url = `/api/timeRecords?empNumber=${empNumber}`;
+      if (month) {
+        url += `&month=${month}`;
+      }
+      fetch(url)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error("タイムレコーダー履歴の取得に失敗しました");
+          }
+          return response.json();
+        })
+        .then(records => {
+          const tbody = document.getElementById("timeRecordsBody");
+          tbody.innerHTML = ""; // 既存の内容をクリア
+
+          // ヘッダーの更新（選択した月がある場合）
+          if (month) {
+            const [year, mon] = month.split("-");
+            document.getElementById("timeRecordsHeader").innerText = `${year}年${mon}月のタイムレコーダー履歴`;
+          } else {
+            document.getElementById("timeRecordsHeader").innerText = "タイムレコーダー履歴";
+          }
+
+          // recordsが空の場合の処理
+          if (!records || records.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" class="text-center">タイムレコーダー履歴がありません</td></tr>`;
+            return;
+          }
+
+          // タイプのマッピングオブジェクト
+          const typeMap = {
+            "clock_in": "出勤",
+            "clock_out": "退勤",
+            "paid_vacation": "有給休暇",
+            "break_start": "休憩開始",
+            "break_end": "休憩終了"
+          };
+
+          records.forEach(rec => {
+            const displayType = typeMap[rec.target_type] || rec.target_type;
+            const datePart = rec.target_date.split("T")[0];
+            const dateTime = datePart + " " + rec.target_time;
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td>${displayType}</td>
+              <td>${dateTime}</td>
+              <td>
+                <input type="text" class="form-control" value="${rec.memo || ''}"
+                  oninput="debouncedSaveMemo(this, ${rec.employee_id}, '${datePart}', '${rec.target_time}')" />
+              </td>
+              <td>
+                <button class="btn btn-danger btn-sm" onclick="deleteTimeRecord(${rec.employee_id}, '${datePart}', '${rec.target_time}', '${rec.target_type}')">
+                  削除
+                </button>
+              </td>
+            `;
+            tbody.appendChild(tr);
+          });
+        })
+        .catch(error => {
+          const timeRecordsElem = document.getElementById("timeRecords");
+          if (timeRecordsElem) {
+            timeRecordsElem.innerHTML = `<div class="alert alert-info">${error.message}</div>`;
+          } else {
+            console.error(error);
+          }
+        });
+    }
+
+
+    // メモ保存用の関数（自動保存）
+    function saveMemo(employeeId, targetDate, targetTime, memo) {
+      const payload = {
+        employee_id: employeeId,
+        target_date: targetDate,
+        target_time: targetTime,
+        memo: memo
+      };
+      fetch("/api/saveMemo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error("メモの保存に失敗しました");
+        }
+        return response.text();
+      })
+      .then(data => {
+        console.log(data);
+      })
+      .catch(error => {
+        alert(error.message);
+      });
+    }
+
+    // 新規タイムレコーダー記録の追加
+    function handleNewTimeRecord(e) {
+      e.preventDefault();
+      const empNumber = getQueryParam("empNumber");
+      if (!empNumber) {
+        alert("従業員番号が指定されていません");
+        return;
+      }
+      fetch(`/api/employeeDetail?empNumber=${empNumber}`)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error("従業員情報の取得に失敗しました");
+          }
+          return response.json();
+        })
+        .then(emp => {
+          const employeeId = emp.id;
+          const recordDate = document.getElementById("record_date").value;
+          const recordTime = document.getElementById("record_time").value;
+          const recordType = document.querySelector('input[name="record_type"]:checked').value;
+          const payload = {
+            employee_id: employeeId,
+            target_date: recordDate,
+            target_time: recordTime,
+            target_type: recordType
+          };
+          fetch("/api/saveWorkRecord", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          })
+          .then(response => {
+            if (!response.ok) {
+              throw new Error("タイムレコーダー記録の追加に失敗しました");
+            }
+            return response.text();
+          })
+          .then(data => {
+            alert("記録が追加されました");
+            fetchTimeRecords();
+          })
+          .catch(error => {
+            alert(error.message);
+          });
+        })
+        .catch(error => {
+          alert(error.message);
+        });
+    }
+
+    // debounce 関数
+    function debounce(func, wait) {
+      let timeout;
+      return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+      };
+    }
+    const debouncedSaveMemo = debounce(function(input, employeeId, targetDate, targetTime) {
+      const memo = input.value;
+      saveMemo(employeeId, targetDate, targetTime, memo);
+    }, 1000);
+
+    function deleteTimeRecord(employeeId, targetDate, targetTime, targetType) {
+      if (!confirm("このタイムレコーダー記録を削除してもよろしいですか？")) {
+        return;
+      }
+      const payload = {
+        employee_id: employeeId,
+        target_date: targetDate,
+        target_time: targetTime,
+        target_type: targetType
+      };
+      fetch("/api/deleteTimeRecord", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error("タイムレコーダー記録の削除に失敗しました");
+        }
+        return response.text();
+      })
+      .then(data => {
+        alert(data);
+        fetchTimeRecords();
+      })
+      .catch(error => {
+        alert(error.message);
+      });
+    }
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
