@@ -1,275 +1,228 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>レポート画面</title>
-    <!-- Bootstrap 5 CDN -->
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-    />
-    <style>
-      body {
-        background-color: #ffffff;
-        color: #1e64aa;
-      }
-      .container-custom {
-        background-color: #ebf3ff;
-        padding: 2rem;
-        border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        margin-bottom: 2rem;
-      }
-      .header-title {
-        font-size: 2rem;
-        font-weight: bold;
-        color: #1e64aa;
-      }
-      .section-title {
-        font-size: 1.5rem;
-        margin-bottom: 1rem;
-        color: #1e64aa;
-      }
-      /* テーブルヘッダー */
-      .table thead {
-        background-color: #285ac8;
-        color: #ffffff;
-      }
-      /* ボタン */
-      .btn-primary {
-        background-color: #285ac8;
-        border-color: #285ac8;
-      }
-      .btn-primary:hover {
-        background-color: #2864f0;
-        border-color: #2864f0;
-      }
-      .btn-success {
-        background-color: #1e64aa;
-        border-color: #1e64aa;
-      }
-      .btn-success:hover {
-        background-color: #2864f0;
-        border-color: #2864f0;
-      }
-      /* テーブル */
-      .table-striped tbody tr:nth-of-type(odd) {
-        background-color: #ffffff;
-      }
-      .table-striped tbody tr:nth-of-type(even) {
-        background-color: #ebf3ff;
-      }
-    </style>
-    <?!= HtmlService.createHtmlOutputFromFile('css').getContent(); ?>
-    <script>
-      // 出力ボタンの処理（自動ダウンロード版）
-      function exportFormat(format) {
-        document.getElementById("export_download_link").innerText = "出力中...";
-        // reportType を取得
-        var reportType = document.getElementById("reportTypeSelect").value;
-        var fnName = "";
-        switch (format) {
-          case "XLSX":
-            fnName = "exportReportToXLSX";
-            break;
-          case "ODS":
-            fnName = "exportReportToODS";
-            break;
-          case "PDF":
-            fnName = "exportReportToPDF";
-            break;
-          case "HTML":
-            fnName = "exportReportToHTML";
-            break;
-          case "CSV":
-            fnName = "exportReportToCSV";
-            break;
-          case "TSV":
-            fnName = "exportReportToTSV";
-            break;
-          default:
-            return;
-        }
-        google.script.run
-          .withSuccessHandler(function (url) {
-            // 非表示のiframeを作成して自動ダウンロードを開始
-            var iframe = document.createElement("iframe");
-            iframe.style.display = "none";
-            iframe.src = url;
-            document.body.appendChild(iframe);
-            // 10秒後にiframeを削除し、「出力中…」のメッセージをクリア
-            setTimeout(function () {
-              document.body.removeChild(iframe);
-              document.getElementById("export_download_link").innerText = "";
-            }, 10000);
-          })
-          [fnName](reportType);
-      }
-    </script>
-  </head>
-  <body>
-    <div class="container container-custom my-4">
-      <h2 class="header-title mb-4">月次勤怠レポート</h2>
-      <!-- 月次勤怠レポート -->
-      <div class="mb-5">
-        <table class="table table-bordered table-striped">
-          <thead>
-            <tr>
-              <th>従業員ID</th>
-              <th>従業員名</th>
-              <th>合計勤務時間(分)</th>
-              <th>合計夜勤時間(分)</th>
-              <th>出勤日数</th>
-              <th>残り出勤日数</th>
-              <th>休日出勤の時間(分)</th>
-              <th>有給取得日数</th>
-              <th>残り有給日数</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?
-              var summary = getMonthlySummary();
-              if(summary.length == 0) {
-              ?>
-            <tr>
-              <td colspan="8" class="text-center">対象データがありません</td>
-            </tr>
-            <?
-              } else {
-                for(var i=0; i<summary.length; i++) {
-                  var empId = summary[i].empId;
-                  var empName = summary[i].empName;
-                  var totalWorkMin = summary[i].totalWorkMin;
-                  var totalNightShiftMin = summary[i].totalNightShiftMin;
-                  var attendanceDays = summary[i].attendanceDays;
-                  var remainingAttendanceCount = summary[i].remainingAttendanceCount
-                  var holidayWorkMin = summary[i].holidayWorkMin;
-                  var paidVacationTaken = summary[i].paidVacationTaken;
-                  var remainingPaidVacation = summary[i].remainingPaidVacation;
-              ?>
-            <tr>
-              <td><?= empId ?></td>
-              <td><?= empName ?></td>
-              <td><?= Math.round(totalWorkMin) ?></td>
-              <td><?= Math.round(totalNightShiftMin) ?></td>
-              <td><?= attendanceDays ?></td>
-              <td><?= remainingAttendanceCount ?></td>
-              <td><?= Math.round(holidayWorkMin) ?></td>
-              <td><?= paidVacationTaken ?></td>
-              <td><?= remainingPaidVacation ?></td>
-            </tr>
-            <? 
-                }
-              }
-              ?>
-          </tbody>
-        </table>
-      </div>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>レポート画面</title>
+  <!-- Bootstrap 5 CDN -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <style>
+    body {
+      background-color: #ffffff;
+      color: #1e64aa;
+    }
+    .container-custom {
+      background-color: #ebf3ff;
+      padding: 2rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      margin-bottom: 2rem;
+    }
+    .header-title {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #1e64aa;
+    }
+    .section-title {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+      color: #1e64aa;
+    }
+    /* テーブルヘッダー */
+    .table thead {
+      background-color: #285ac8;
+      color: #ffffff;
+    }
+    .btn-primary {
+      background-color: #285ac8;
+      border-color: #285ac8;
+    }
+    .btn-primary:hover {
+      background-color: #2864f0;
+      border-color: #2864f0;
+    }
+    .btn-success {
+      background-color: #1e64aa;
+      border-color: #1e64aa;
+    }
+    .btn-success:hover {
+      background-color: #2864f0;
+      border-color: #2864f0;
+    }
+    /* テーブルの縞模様 */
+    .table-striped tbody tr:nth-of-type(odd) {
+      background-color: #ffffff;
+    }
+    .table-striped tbody tr:nth-of-type(even) {
+      background-color: #ebf3ff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container container-custom my-4">
+    <h2 class="header-title mb-4">月次勤怠レポート</h2>
+    <!-- 月次勤怠レポート -->
+    <div class="mb-5">
+      <table class="table table-bordered table-striped">
+        <thead>
+          <tr>
+            <th>従業員ID</th>
+            <th>従業員名</th>
+            <th>合計勤務時間(分)</th>
+            <th>合計夜勤時間(分)</th>
+            <th>出勤日数</th>
+            <th>残り出勤日数</th>
+            <th>休日出勤の時間(分)</th>
+            <th>有給取得日数</th>
+            <th>残り有給日数</th>
+          </tr>
+        </thead>
+        <tbody id="monthlySummaryTableBody">
+          <!-- AJAXでデータが挿入される -->
+        </tbody>
+      </table>
+    </div>
 
-      <!-- 職種別勤怠レポート -->
-      <div class="mb-5">
-        <h2 class="header-title mb-4">職種別勤怠レポート</h2>
-        <table class="table table-bordered table-striped">
-          <thead>
-            <tr>
-              <th>職種コード</th>
-              <th>職種名</th>
-              <th>合計勤務時間(分)</th>
-              <th>合計夜勤時間(分)</th>
-              <th>出勤日数</th>
-              <th>残り出勤日数</th>
-              <th>休日出勤の時間(分)</th>
-              <th>有給取得日数</th>
-              <th>残り有給日数</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?
-              var groupedSummary = getMonthlySummaryByJob();
-              if (groupedSummary.length == 0) {
-              ?>
-            <tr>
-              <td colspan="8" class="text-center">対象データがありません</td>
-            </tr>
-            <?
-              } else {
-                for (var i = 0; i < groupedSummary.length; i++) {
-                  var jobCode = groupedSummary[i].jobCode;
-                  var jobName = groupedSummary[i].jobName;
-                  var totalWorkMin = groupedSummary[i].totalWorkMin;
-                  var totalNightShiftMin = groupedSummary[i].totalNightShiftMin;
-                  var attendanceDays = groupedSummary[i].attendanceDays;
-                  <!-- ここが重要 -->
-            var remainingAttendanceCount =
-            groupedSummary[i].remainingAttendanceCount; var holidayWorkMin =
-            groupedSummary[i].holidayWorkMin; var paidVacationTaken =
-            groupedSummary[i].paidVacationTaken; var remainingPaidVacation =
-            groupedSummary[i].remainingPaidVacation; ?>
-            <tr>
-              <td><?= jobCode ?></td>
-              <td><?= jobName ?></td>
-              <td><?= Math.round(totalWorkMin) ?></td>
-              <td><?= Math.round(totalNightShiftMin) ?></td>
-              <td><?= attendanceDays ?></td>
-              <td><?= remainingAttendanceCount ?></td>
-              <td><?= Math.round(holidayWorkMin) ?></td>
-              <td><?= paidVacationTaken ?></td>
-              <td><?= remainingPaidVacation ?></td>
-            </tr>
-            <? 
-                }
-              }
-              ?>
-          </tbody>
-        </table>
-      </div>
+    <!-- 職種別勤怠レポート -->
+    <h2 class="header-title mb-4">職種別勤怠レポート</h2>
+    <div class="mb-5">
+      <table class="table table-bordered table-striped">
+        <thead>
+          <tr>
+            <th>職種コード</th>
+            <th>職種名</th>
+            <th>合計勤務時間(分)</th>
+            <th>合計夜勤時間(分)</th>
+            <th>出勤日数</th>
+            <th>残り出勤日数</th>
+            <th>休日出勤の時間(分)</th>
+            <th>有給取得日数</th>
+            <th>残り有給日数</th>
+          </tr>
+        </thead>
+        <tbody id="jobSummaryTableBody">
+          <!-- AJAXでデータが挿入される -->
+        </tbody>
+      </table>
+    </div>
 
-      <!-- レポート出力セクション -->
-      <div class="mb-4">
-        <h2 class="header-title mb-3">レポート出力</h2>
-        <div class="mb-3">
-          <label for="reportTypeSelect" class="form-label"
-            >出力レポートタイプ:</label
-          >
-          <select
-            id="reportTypeSelect"
-            class="form-select w-auto d-inline-block"
-          >
-            <option value="monthly">月次勤怠レポート</option>
-            <option value="job">職種別勤怠レポート</option>
-          </select>
-        </div>
-        <div class="d-flex flex-wrap gap-2">
-          <button class="btn btn-primary" onclick="exportFormat('XLSX')">
-            XLSX出力
-          </button>
-          <button class="btn btn-primary" onclick="exportFormat('ODS')">
-            ODS出力
-          </button>
-          <button class="btn btn-primary" onclick="exportFormat('PDF')">
-            PDF出力
-          </button>
-          <button class="btn btn-primary" onclick="exportFormat('HTML')">
-            HTML出力
-          </button>
-          <button class="btn btn-primary" onclick="exportFormat('CSV')">
-            CSV出力
-          </button>
-          <button class="btn btn-primary" onclick="exportFormat('TSV')">
-            TSV出力
-          </button>
-        </div>
-        <div id="export_download_link" class="mt-3"></div>
+    <!-- レポート出力セクション -->
+    <div class="mb-4">
+      <h2 class="header-title mb-3">レポート出力</h2>
+      <div class="mb-3">
+        <label for="reportTypeSelect" class="form-label">出力レポートタイプ:</label>
+        <select id="reportTypeSelect" class="form-select w-auto d-inline-block">
+          <option value="monthly">月次勤怠レポート</option>
+          <option value="job">職種別勤怠レポート</option>
+        </select>
       </div>
-
-      <div class="text-center mt-4">
-        <span style="white-space: nowrap">
-          <a href="view_home.html" class="btn btn-primary">ホーム画面に戻る</a>
-        </span>
+      <div class="d-flex flex-wrap gap-2">
+        <a id="exportLink" href="#" class="btn btn-primary">出力</a>
       </div>
     </div>
-    <!-- Bootstrap 5 JS Bundle -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  </body>
+
+    <div class="text-center mt-4">
+      <a href="view_home.html" class="btn btn-primary">ホーム画面に戻る</a>
+    </div>
+  </div>
+  <!-- Bootstrap 5 JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // 月次勤怠レポートのデータを取得する関数
+    function fetchMonthlySummary() {
+      fetch('/api/monthlySummary')
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('月次勤怠レポートの取得に失敗しました: ' + response.status);
+          }
+          return response.json();
+        })
+        .then(data => {
+          // dataがnullの場合は空配列に置き換え
+          if (!data) { data = []; }
+          const tableBody = document.getElementById('monthlySummaryTableBody');
+          tableBody.innerHTML = '';
+          if (data.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="9" class="text-center">対象データがありません</td></tr>';
+          } else {
+            data.forEach(item => {
+              const tr = document.createElement('tr');
+              tr.innerHTML = `
+                <td>${item.EmpId}</td>
+                <td>${item.EmpName}</td>
+                <td>${item.TotalWorkMin}</td>
+                <td>${item.TotalNightShiftMin}</td>
+                <td>${item.AttendanceDays}</td>
+                <td>${item.RemainingAttendanceCount}</td>
+                <td>${item.HolidayWorkMin}</td>
+                <td>${item.PaidVacationTaken}</td>
+                <td>${item.RemainingPaidVacation}</td>
+              `;
+              tableBody.appendChild(tr);
+            });
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching monthly summary:', error);
+          document.getElementById('monthlySummaryTableBody').innerHTML = `<tr><td colspan="9" class="text-center">エラーが発生しました: ${error.message}</td></tr>`;
+        });
+    }
+
+    // 職種別勤怠レポートのデータを取得する関数
+    function fetchJobSummary() {
+      fetch('/api/jobSummary')
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('職種別勤怠レポートの取得に失敗しました: ' + response.status);
+          }
+          return response.json();
+        })
+        .then(data => {
+          // dataがnullの場合は空配列に置き換え
+          if (!data) { data = []; }
+          const tableBody = document.getElementById('jobSummaryTableBody');
+          tableBody.innerHTML = '';
+          if (data.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="9" class="text-center">対象データがありません</td></tr>';
+          } else {
+            data.forEach(item => {
+              const tr = document.createElement('tr');
+              tr.innerHTML = `
+                <td>${item.JobCode}</td>
+                <td>${item.JobName}</td>
+                <td>${item.TotalWorkMin}</td>
+                <td>${item.TotalNightShiftMin}</td>
+                <td>${item.AttendanceDays}</td>
+                <td>${item.RemainingAttendanceCount}</td>
+                <td>${item.HolidayWorkMin}</td>
+                <td>${item.PaidVacationTaken}</td>
+                <td>${item.RemainingPaidVacation}</td>
+              `;
+              tableBody.appendChild(tr);
+            });
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching job summary:', error);
+          document.getElementById('jobSummaryTableBody').innerHTML = `<tr><td colspan="9" class="text-center">エラーが発生しました: ${error.message}</td></tr>`;
+        });
+    }
+
+    // 出力レポートリンクの更新（例）
+    function updateExportLink() {
+      const reportType = document.getElementById('reportTypeSelect').value;
+      const exportLink = document.getElementById('exportLink');
+      exportLink.href = `/export?format=XLSX&type=${reportType}`;
+    }
+
+    // 初期処理
+    window.addEventListener('load', function() {
+      fetchMonthlySummary();
+      fetchJobSummary();
+      updateExportLink();
+    });
+
+    document.getElementById('reportTypeSelect').addEventListener('change', updateExportLink);
+  </script>
+</body>
 </html>

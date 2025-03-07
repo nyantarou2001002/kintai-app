@@ -222,6 +222,7 @@
     </script>
 
 
+    <!-- 新しい従業員を追加 -->
     <div class="mb-4">
       <h3>新しい従業員を追加</h3>
       <form id="addEmployeeForm" onsubmit="handleAddEmployee(event)">
@@ -235,16 +236,31 @@
             <option value="">-- 職種を選択してください --</option>
           </select>
         </div>
+        <!-- 追加：雇用形態 -->
         <div class="mb-3">
-          <label for="max_attendance_count" class="form-label">出勤回数上限:</label>
-          <input type="number" class="form-control" id="max_attendance_count" required>
+          <label class="form-label">雇用形態:</label>
+          <div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="employment_type" id="fulltime" value="正社員" checked>
+              <label class="form-check-label" for="fulltime">正社員</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="employment_type" id="parttime" value="パート">
+              <label class="form-check-label" for="parttime">パート</label>
+            </div>
+          </div>
+        </div>
+        <!-- 追加：パートの場合のみ表示する時給入力 -->
+        <div class="mb-3" id="hourlyWageDiv" style="display: none;">
+          <label for="hourly_wage" class="form-label">時給 (円):</label>
+          <input type="number" class="form-control" id="hourly_wage" min="0">
         </div>
         <div class="mb-3">
           <label for="paid_vacation_limit" class="form-label">有給休暇上限:</label>
           <input type="number" class="form-control" id="paid_vacation_limit" required>
         </div>
         <div class="mb-3">
-          <label for="paid_vacation_grant_date" class="form-label">有給休暇付与日:</label>
+          <label for="paid_vacation_grant_date" class="form-label">入社日:</label>
           <input type="date" class="form-control" id="paid_vacation_grant_date" required>
         </div>
         <button type="submit" class="btn btn-success">追加</button>
@@ -252,31 +268,56 @@
       <div id="employee_add_message" class="mt-2"></div>
     </div>
 
+    <!-- 追加：雇用形態に応じて時給入力欄の表示制御 -->
     <script>
+      // 雇用形態のラジオボタンの変更時に、パートの場合は時給入力欄を表示する
+      document.querySelectorAll('input[name="employment_type"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+          const hourlyWageDiv = document.getElementById('hourlyWageDiv');
+          if (this.value === 'パート') {
+            hourlyWageDiv.style.display = 'block';
+          } else {
+            hourlyWageDiv.style.display = 'none';
+          }
+        });
+      });
+
+      // 変更後の handleAddEmployee 関数（抜粋）
       function handleAddEmployee(event) {
         event.preventDefault();
-        
         const record = {
           name: document.getElementById("employee_name").value,
           job: document.getElementById("employee_job").value,
-          max_attendance_count: parseInt(document.getElementById("max_attendance_count").value, 10),
+          max_attendance_count: 20,
           paid_vacation_limit: parseInt(document.getElementById("paid_vacation_limit").value, 10),
-          paid_vacation_grant_date: document.getElementById("paid_vacation_grant_date").value
+          // 入社日から半年後の日付を自動計算して paid_vacation_grant_date とする
+          paid_vacation_grant_date: (function() {
+            const joiningDateStr = document.getElementById("paid_vacation_grant_date").value;
+            const joiningDate = new Date(joiningDateStr);
+            joiningDate.setMonth(joiningDate.getMonth() + 6);
+            return joiningDate.toISOString().split("T")[0];
+          })(),
+          employment_type: document.querySelector('input[name="employment_type"]:checked').value,
+          hourly_wage: 0
         };
-
+        if (record.employment_type === "パート") {
+          record.hourly_wage = parseInt(document.getElementById("hourly_wage").value, 10) || 0;
+        }
         fetch('/api/addEmployee', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(record)
         })
-        .then(response => response.text())
-        .then(data => {
-          alert("従業員を追加しました!!");
-          fetchEmployees(); // 更新
-        })
-        .catch(error => console.error('エラー:', error));
+          .then(response => response.text())
+          .then(data => {
+            alert("従業員を追加しました!!");
+            fetchEmployees();
+          })
+          .catch(error => console.error('エラー:', error));
       }
+
     </script>
+
 
     <div class="mb-4">
       <h3>新しい職種を追加</h3>

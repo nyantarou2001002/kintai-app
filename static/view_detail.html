@@ -28,17 +28,111 @@
       margin-bottom: 1rem;
       color: #1e64aa;
     }
+    /* 休憩時間入力欄は初期は非表示 */
+    #breakDurationContainer {
+      display: none;
+    }
+    /* 編集モードの「時給」入力欄は初期は非表示 */
+    #emp_hourly_wage_container {
+      display: none;
+    }
+    /* 対象日時セル内の編集用入力欄 */
+    .editable-input {
+      width: 100%;
+      box-sizing: border-box;
+    }
+    /* 従業員詳細コンテナの最小高さを指定 */
+    #employeeDetailsContainer {
+      min-height: 350px;
+    }
   </style>
 </head>
 <body>
   <div class="container container-custom my-4">
     <h1 class="header-title">従業員詳細</h1>
-    <div id="employeeDetail">
-      <!-- 従業員詳細情報がここに表示される -->
-      <p>読み込み中...</p>
+    
+    <!-- 従業員詳細コンテナ：表示・編集モード共通で高さを固定 -->
+    <div id="employeeDetailsContainer">
+      <!-- 表示モード -->
+      <div id="employeeDetailsDisplay" class="mb-4">
+        <p><strong>従業員番号:</strong> <span id="display_employee_number"></span></p>
+        <p><strong>名前:</strong> <span id="display_emp_name"></span></p>
+        <p><strong>職種:</strong> <span id="display_emp_job"></span></p>
+        <p><strong>次回有給休暇付与日数:</strong> <span id="display_emp_paid_vacation_limit"></span></p>
+        <p><strong>有給休暇付与予定日:</strong> <span id="display_emp_paid_vacation_grant_date"></span></p>
+        <!-- 新規追加：有効な（2年以内の）有給休暇日数 -->
+        <p><strong>有効有休休暇日数:</strong> <span id="display_valid_paid_vacation_count"></span></p>
+        <p><strong>現在の出勤回数:</strong> <span id="display_current_attendance_count"></span></p>
+        <p><strong>有給休暇取得数:</strong> <span id="display_paid_vacation_count"></span></p>
+        <p><strong>雇用形態:</strong> <span id="display_emp_employment_type"></span></p>
+        <p id="display_hourly_wage_container" style="display: none;"><strong>時給:</strong> <span id="display_hourly_wage"></span> 円</p>
+        <button id="editButton" class="btn btn-primary" onclick="toggleEdit()">編集</button>
+      </div>
+
+      <!-- 編集モード -->
+      <div id="employeeDetailsEdit" class="mb-4" style="display:none;">
+        <form id="updateEmployeeForm" onsubmit="handleUpdateEmployee(event)">
+          <div class="mb-2">
+            <label for="emp_name" class="form-label">名前:</label>
+            <input type="text" id="emp_name" class="form-control" required>
+          </div>
+          <div class="mb-2">
+            <label for="emp_job" class="form-label">職種:</label>
+            <select id="emp_job" class="form-control" required>
+              <!-- オプションは fetchJobTypes() で追加 -->
+            </select>
+          </div>
+          <!-- 新規追加：雇用形態 -->
+          <div class="mb-2">
+            <label class="form-label">雇用形態:</label>
+            <div>
+              <div class="form-check form-check-inline">
+                <input type="radio" name="emp_employment_type" value="正社員" id="employment_fulltime" class="form-check-input" required>
+                <label class="form-check-label" for="employment_fulltime">正社員</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input type="radio" name="emp_employment_type" value="パート" id="employment_parttime" class="form-check-input">
+                <label class="form-check-label" for="employment_parttime">パート</label>
+              </div>
+            </div>
+          </div>
+          <!-- 新規追加：パート選択時のみ表示する時給 -->
+          <div class="mb-2" id="emp_hourly_wage_container">
+            <label for="emp_hourly_wage" class="form-label">時給 (円):</label>
+            <input type="number" id="emp_hourly_wage" class="form-control" min="0">
+          </div>
+          <!-- 有給休暇関連 -->
+          <div class="mb-2">
+            <label for="emp_paid_vacation_limit" class="form-label">次回有給休暇付与日数:</label>
+            <input type="number" id="emp_paid_vacation_limit" class="form-control" required>
+          </div>
+          <div class="mb-2">
+            <label for="emp_paid_vacation_grant_date" class="form-label">有給休暇付与日:</label>
+            <input type="date" id="emp_paid_vacation_grant_date" class="form-control" required>
+          </div>
+          <button type="submit" class="btn btn-primary">更新</button>
+          <button type="button" class="btn btn-secondary" onclick="toggleEdit()">キャンセル</button>
+        </form>
+      </div>
     </div>
 
-    <!-- 月選択入力を追加 -->
+    <!-- 有給休暇付与履歴表示部分 -->
+    <div id="paidVacationHistorySection" class="mb-4">
+      <h3 class="section-title">有給休暇付与履歴</h3>
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th>付与日</th>
+            <th>付与された日数</th>
+          </tr>
+        </thead>
+        <tbody id="paidVacationHistoryBody">
+          <!-- 履歴データがここに追加される -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 月選択入力 -->
     <div class="mb-3">
       <label for="monthSelect" class="form-label">表示する月:</label>
       <input type="month" id="monthSelect" class="form-control" onchange="fetchTimeRecords()">
@@ -62,7 +156,7 @@
       </table>
     </div>
 
-    <!-- 新規タイムレコーダー記録フォーム（省略／既存） -->
+    <!-- 新規タイムレコーダー記録フォーム -->
     <div id="newTimeRecord" class="mt-4">
       <h3 class="section-title">新規タイムレコーダー記録</h3>
       <form id="newTimeRecordForm" onsubmit="handleNewTimeRecord(event)">
@@ -73,6 +167,11 @@
         <div class="mb-3">
           <label for="record_time" class="form-label">対象時刻:</label>
           <input type="time" id="record_time" class="form-control" required>
+        </div>
+        <!-- 休憩時間入力欄 -->
+        <div class="mb-3" id="breakDurationContainer">
+          <label for="break_duration" class="form-label">休憩時間（分）:</label>
+          <input type="number" id="break_duration" class="form-control" min="0" placeholder="例: 30">
         </div>
         <div class="mb-3">
           <label class="form-label">種別:</label>
@@ -97,6 +196,10 @@
               <input type="radio" name="record_type" value="break_end" id="break_end" class="form-check-input">
               <label for="break_end" class="form-check-label">休憩終了</label>
             </div>
+            <div class="form-check form-check-inline">
+              <input type="radio" name="record_type" value="break_duration" id="break_duration" class="form-check-input">
+              <label for="break_duration" class="form-check-label">休憩時間</label>
+            </div>
           </div>
         </div>
         <button type="submit" class="btn btn-success">記録を追加</button>
@@ -109,21 +212,27 @@
   </div>
 
   <script>
-    // URLクエリパラメータから指定のパラメータを取得する関数
+    // URLクエリパラメータ取得
     function getQueryParam(param) {
       const params = new URLSearchParams(window.location.search);
       return params.get(param);
     }
-
-    // 現在の年月を "YYYY-MM" 形式で返す関数
+  
+    // 従業員番号の余計な付加部分削除
+    function getEmployeeNumber() {
+      const emp = getQueryParam("empNumber");
+      return emp ? emp.replace(/:.*/, "") : emp;
+    }
+  
+    // 現在の年月 (YYYY-MM形式)
     function getCurrentMonth() {
       const now = new Date();
       const year = now.getFullYear();
       const month = ("0" + (now.getMonth() + 1)).slice(-2);
       return `${year}-${month}`;
     }
-
-    // ページ読み込み時に月選択欄に現在の月を設定（もし値が空なら）
+  
+    // ページ初期設定
     window.addEventListener("load", function() {
       const monthSelect = document.getElementById("monthSelect");
       if (!monthSelect.value) {
@@ -131,13 +240,69 @@
       }
       fetchEmployeeDetail();
       fetchTimeRecords();
+  
+      // record_type変更イベント
+      document.querySelectorAll('input[name="record_type"]').forEach(function(radio) {
+        radio.addEventListener("change", function() {
+          const timeInput = document.getElementById("record_time");
+          const breakDurationContainer = document.getElementById("breakDurationContainer");
+          if (this.value === "paid_vacation" || this.value === "break_duration") {
+            timeInput.value = "00:00";
+            timeInput.disabled = true;
+            breakDurationContainer.style.display = (this.value === "break_duration") ? "block" : "none";
+          } else {
+            timeInput.disabled = false;
+            breakDurationContainer.style.display = "none";
+          }
+        });
+      });
+  
+      // 雇用形態ラジオ変更イベント：パート選択時は時給欄表示
+      document.querySelectorAll('input[name="emp_employment_type"]').forEach(function(radio) {
+        radio.addEventListener("change", function() {
+          const wageContainer = document.getElementById("emp_hourly_wage_container");
+          if (this.value === "パート") {
+            wageContainer.style.display = "block";
+          } else {
+            wageContainer.style.display = "none";
+          }
+        });
+      });
     });
-
-    // 従業員詳細情報の取得（既存）
+  
+    // 職種一覧取得＆セレクト更新
+    function fetchJobTypes(selectedJob) {
+      fetch("/api/jobTypes")
+        .then(response => {
+          if (!response.ok) {
+            throw new Error("職種一覧の取得に失敗しました");
+          }
+          return response.json();
+        })
+        .then(jobTypes => {
+          const jobSelect = document.getElementById("emp_job");
+          jobSelect.innerHTML = "";
+          jobTypes.forEach(job => {
+            const option = document.createElement("option");
+            option.value = job.name;
+            option.text = `${job.name} (${job.code})`;
+            if (job.name === selectedJob) {
+              option.selected = true;
+            }
+            jobSelect.appendChild(option);
+          });
+        })
+        .catch(error => {
+          console.error(error);
+          alert(error.message);
+        });
+    }
+  
+    // 従業員詳細取得
     function fetchEmployeeDetail() {
-      const empNumber = getQueryParam("empNumber");
+      const empNumber = getEmployeeNumber();
       if (!empNumber) {
-        document.getElementById("employeeDetail").innerText = "従業員番号が指定されていません";
+        document.getElementById("employeeDetailsDisplay").innerText = "従業員番号が指定されていません";
         return;
       }
       fetch(`/api/employeeDetail?empNumber=${empNumber}`)
@@ -148,25 +313,81 @@
           return response.json();
         })
         .then(emp => {
-          const detailDiv = document.getElementById("employeeDetail");
+          // 付与日とラベルを分解
           const grantDate = emp.paid_vacation_grant_date ? emp.paid_vacation_grant_date.split("T")[0] : "";
-          detailDiv.innerHTML = `
-            <p><strong>従業員番号:</strong> ${emp.employee_number}</p>
-            <p><strong>名前:</strong> ${emp.name}</p>
-            <p><strong>職種:</strong> ${emp.job} (${emp.job_code})</p>
-            <p><strong>出勤回数上限:</strong> ${emp.max_attendance_count}</p>
-            <p><strong>有給休暇上限:</strong> ${emp.paid_vacation_limit}</p>
-            <p><strong>有給休暇付与日:</strong> ${grantDate}</p>
-          `;
+          // （今回、表示側は付与予定日のみ表示するので、ラベルは使わない）
+          document.getElementById("display_employee_number").innerText = emp.employee_number;
+          document.getElementById("display_emp_name").innerText = emp.name;
+          document.getElementById("display_emp_job").innerText = emp.job + " (" + emp.job_code + ")";
+          document.getElementById("display_emp_paid_vacation_limit").innerText = emp.paid_vacation_limit === -1 ? "未設定" : emp.paid_vacation_limit;
+
+
+          document.getElementById("display_emp_paid_vacation_grant_date").innerText = grantDate;
+          // 新規追加：有効な有給休暇日数を表示（サーバー側で計算した値）
+          document.getElementById("display_valid_paid_vacation_count").innerText = emp.valid_paid_vacation_count || 0;
+  
+          document.getElementById("display_current_attendance_count").innerText = emp.current_attendance_count || 0;
+          document.getElementById("display_paid_vacation_count").innerText = emp.paid_vacation_count || 0;
+          document.getElementById("display_emp_employment_type").innerText = emp.employment_type;
+          if (emp.employment_type === "パート") {
+            document.getElementById("display_hourly_wage_container").style.display = "block";
+            document.getElementById("display_hourly_wage").innerText = emp.hourly_wage;
+          } else {
+            document.getElementById("display_hourly_wage_container").style.display = "none";
+          }
+          document.getElementById("emp_name").value = emp.name;
+          fetchJobTypes(emp.job);
+          document.getElementById("emp_paid_vacation_limit").value = emp.paid_vacation_limit === -1 ? "" : emp.paid_vacation_limit;
+
+          document.getElementById("emp_paid_vacation_grant_date").value = grantDate;
+          if (emp.employment_type === "パート") {
+            document.getElementById("employment_parttime").checked = true;
+            document.getElementById("emp_hourly_wage_container").style.display = "block";
+            document.getElementById("emp_hourly_wage").value = emp.hourly_wage;
+          } else {
+            document.getElementById("employment_fulltime").checked = true;
+            document.getElementById("emp_hourly_wage_container").style.display = "none";
+          }
+          
+          // 有給休暇付与履歴の反映
+          const historyBody = document.getElementById("paidVacationHistoryBody");
+          if (emp.paid_vacation_history && emp.paid_vacation_history.length > 0) {
+            historyBody.innerHTML = "";
+            emp.paid_vacation_history.forEach(history => {
+              const tr = document.createElement("tr");
+              const tdGrantDate = document.createElement("td");
+              tdGrantDate.innerText = history.grant_date ? history.grant_date.substring(0, 10) : "";
+              const tdGrantedDays = document.createElement("td");
+              tdGrantedDays.innerText = history.granted_days;
+              tr.appendChild(tdGrantDate);
+              tr.appendChild(tdGrantedDays);
+              historyBody.appendChild(tr);
+            });
+          } else {
+            historyBody.innerHTML = '<tr><td colspan="2" class="text-center">有給休暇付与履歴はありません</td></tr>';
+          }
         })
         .catch(error => {
-          document.getElementById("employeeDetail").innerText = error.message;
+          document.getElementById("employeeDetailsDisplay").innerText = error.message;
         });
     }
-
-    // タイムレコーダー履歴の取得
+  
+    // 編集モード切替
+    function toggleEdit() {
+      const displayDiv = document.getElementById("employeeDetailsDisplay");
+      const editDiv = document.getElementById("employeeDetailsEdit");
+      if (displayDiv.style.display === "none") {
+        displayDiv.style.display = "block";
+        editDiv.style.display = "none";
+      } else {
+        displayDiv.style.display = "none";
+        editDiv.style.display = "block";
+      }
+    }
+  
+    // タイムレコーダー履歴取得
     function fetchTimeRecords() {
-      const empNumber = getQueryParam("empNumber");
+      const empNumber = getEmployeeNumber();
       if (!empNumber) return;
       const month = document.getElementById("monthSelect").value;
       let url = `/api/timeRecords?empNumber=${empNumber}`;
@@ -182,64 +403,210 @@
         })
         .then(records => {
           const tbody = document.getElementById("timeRecordsBody");
-          tbody.innerHTML = ""; // 既存の内容をクリア
-
-          // ヘッダーの更新（選択した月がある場合）
+          tbody.innerHTML = "";
           if (month) {
             const [year, mon] = month.split("-");
-            document.getElementById("timeRecordsHeader").innerText = `${year}年${mon}月のタイムレコーダー履歴`;
+            const header = document.getElementById("timeRecordsHeader");
+            if (header) {
+              header.innerText = `${year}年${mon}月のタイムレコーダー履歴`;
+            }
           } else {
-            document.getElementById("timeRecordsHeader").innerText = "タイムレコーダー履歴";
+            const header = document.getElementById("timeRecordsHeader");
+            if (header) {
+              header.innerText = "タイムレコーダー履歴";
+            }
           }
-
-          // recordsが空の場合の処理
           if (!records || records.length === 0) {
             tbody.innerHTML = `<tr><td colspan="4" class="text-center">タイムレコーダー履歴がありません</td></tr>`;
             return;
           }
-
-          // タイプのマッピングオブジェクト
           const typeMap = {
             "clock_in": "出勤",
             "clock_out": "退勤",
             "paid_vacation": "有給休暇",
             "break_start": "休憩開始",
-            "break_end": "休憩終了"
+            "break_end": "休憩終了",
+            "break_duration": "休憩時間"
           };
-
           records.forEach(rec => {
             const displayType = typeMap[rec.target_type] || rec.target_type;
             const datePart = rec.target_date.split("T")[0];
-            const dateTime = datePart + " " + rec.target_time;
+            const timeParts = rec.target_time.split(":");
+            const timeStr = timeParts[0] + ":" + timeParts[1];
+  
             const tr = document.createElement("tr");
-            tr.innerHTML = `
-              <td>${displayType}</td>
-              <td>${dateTime}</td>
-              <td>
-                <input type="text" class="form-control" value="${rec.memo || ''}"
-                  oninput="debouncedSaveMemo(this, ${rec.employee_id}, '${datePart}', '${rec.target_time}')" />
-              </td>
-              <td>
-                <button class="btn btn-danger btn-sm" onclick="deleteTimeRecord(${rec.employee_id}, '${datePart}', '${rec.target_time}', '${rec.target_type}')">
-                  削除
-                </button>
-              </td>
-            `;
-            tbody.appendChild(tr);
+  
+            // 種別列
+            const tdType = document.createElement("td");
+            tdType.innerText = displayType;
+            tr.appendChild(tdType);
+  
+            // 対象日時列
+            const tdDateTime = document.createElement("td");
+            const spanDateTime = document.createElement("span");
+  
+            if(rec.target_type === "break_duration") {
+              spanDateTime.innerText = datePart + " " + (rec.break_duration != null ? rec.break_duration : "0") + "分";
+              spanDateTime.style.cursor = "pointer";
+              spanDateTime.dataset.employeeId = rec.employee_id;
+              spanDateTime.dataset.oldDate = datePart;
+              spanDateTime.dataset.oldTime = rec.break_duration != null ? rec.break_duration.toString() : "0";
+              spanDateTime.dataset.targetType = rec.target_type;
+              spanDateTime.addEventListener("click", function() {
+                const input = document.createElement("input");
+                input.type = "number";
+                input.classList.add("editable-input");
+                input.value = rec.break_duration != null ? rec.break_duration : 0;
+                input.addEventListener("blur", function() {
+                  const newMinutes = parseInt(this.value, 10);
+                  if (!isNaN(newMinutes) && newMinutes.toString() !== spanDateTime.dataset.oldTime) {
+                    updateWorkRecord({
+                      employee_id: Number(spanDateTime.dataset.employeeId),
+                      old_target_date: spanDateTime.dataset.oldDate,
+                      old_target_time: spanDateTime.dataset.oldTime,
+                      target_type: spanDateTime.dataset.targetType,
+                      new_target_time: newMinutes.toString()
+                    }, function(success) {
+                      if (success) {
+                        spanDateTime.innerText = spanDateTime.dataset.oldDate + " " + newMinutes + "分";
+                        spanDateTime.dataset.oldTime = newMinutes.toString();
+                        tdDateTime.innerHTML = "";
+                        tdDateTime.appendChild(spanDateTime);
+                      } else {
+                        alert("日時の更新に失敗しました");
+                        tdDateTime.innerHTML = "";
+                        tdDateTime.appendChild(spanDateTime);
+                      }
+                    });
+                  } else {
+                    tdDateTime.innerHTML = "";
+                    tdDateTime.appendChild(spanDateTime);
+                  }
+                });
+                tdDateTime.innerHTML = "";
+                tdDateTime.appendChild(input);
+                input.focus();
+              });
+            } else if(rec.target_type === "paid_vacation") {
+              spanDateTime.innerText = datePart + " " + timeStr;
+              spanDateTime.style.cursor = "default";
+            } else {
+              spanDateTime.innerText = datePart + " " + timeStr;
+              spanDateTime.style.cursor = "pointer";
+              spanDateTime.dataset.employeeId = rec.employee_id;
+              spanDateTime.dataset.oldDate = datePart;
+              spanDateTime.dataset.oldTime = timeStr;
+              spanDateTime.dataset.targetType = rec.target_type;
+              spanDateTime.addEventListener("click", function() {
+                const input = document.createElement("input");
+                input.type = "time";
+                input.classList.add("editable-input");
+                input.value = timeStr;
+                input.addEventListener("blur", function() {
+                  const newTime = this.value;
+                  if(newTime && newTime !== timeStr) {
+                    updateWorkRecord({
+                      employee_id: Number(spanDateTime.dataset.employeeId),
+                      old_target_date: spanDateTime.dataset.oldDate,
+                      old_target_time: spanDateTime.dataset.oldTime,
+                      target_type: spanDateTime.dataset.targetType,
+                      new_target_date: spanDateTime.dataset.oldDate,
+                      new_target_time: newTime
+                    }, function(success) {
+                      if(success) {
+                        spanDateTime.innerText = datePart + " " + newTime;
+                        spanDateTime.dataset.oldTime = newTime;
+                        tdDateTime.innerHTML = "";
+                        tdDateTime.appendChild(spanDateTime);
+                      } else {
+                        alert("日時の更新に失敗しました");
+                        tdDateTime.innerHTML = "";
+                        tdDateTime.appendChild(spanDateTime);
+                      }
+                    });
+                  } else {
+                    tdDateTime.innerHTML = "";
+                    tdDateTime.appendChild(spanDateTime);
+                  }
+                });
+                tdDateTime.innerHTML = "";
+                tdDateTime.appendChild(input);
+                input.focus();
+              });
+            }
+  
+            tdDateTime.appendChild(spanDateTime);
+            tr.appendChild(tdDateTime);
+  
+            // メモ列
+            const tdMemo = document.createElement("td");
+            const memoInput = document.createElement("input");
+            memoInput.type = "text";
+            memoInput.classList.add("form-control");
+            memoInput.value = rec.memo || "";
+            memoInput.addEventListener("input", function() {
+              debouncedSaveMemo(this, rec.employee_id, datePart, timeStr);
+            });
+            tdMemo.appendChild(memoInput);
+            tr.appendChild(tdMemo);
+  
+            // 操作列
+            const tdOp = document.createElement("td");
+            const delBtn = document.createElement("button");
+            delBtn.classList.add("btn", "btn-danger", "btn-sm");
+            delBtn.innerText = "削除";
+            delBtn.addEventListener("click", function() {
+              deleteTimeRecord(rec.employee_id, datePart, timeStr, rec.target_type);
+            });
+            tdOp.appendChild(delBtn);
+            tr.appendChild(tdOp);
+  
+            document.getElementById("timeRecordsBody").appendChild(tr);
           });
         })
         .catch(error => {
           const timeRecordsElem = document.getElementById("timeRecords");
-          if (timeRecordsElem) {
+          if(timeRecordsElem) {
             timeRecordsElem.innerHTML = `<div class="alert alert-info">${error.message}</div>`;
           } else {
             console.error(error);
           }
         });
     }
-
-
-    // メモ保存用の関数（自動保存）
+  
+    function updateWorkRecord(payload, callback) {
+      fetch("/api/updateWorkRecord", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error("日時更新エラー");
+        }
+        return response.text();
+      })
+      .then(data => {
+        callback(true);
+      })
+      .catch(error => {
+        console.error(error);
+        callback(false);
+      });
+    }
+  
+    function debounce(func, wait) {
+      let timeout;
+      return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+      };
+    }
+    const debouncedSaveMemo = debounce(function(input, employeeId, targetDate, targetTime) {
+      const memo = input.value;
+      saveMemo(employeeId, targetDate, targetTime, memo);
+    }, 1000);
+  
     function saveMemo(employeeId, targetDate, targetTime, memo) {
       const payload = {
         employee_id: employeeId,
@@ -265,8 +632,7 @@
         alert(error.message);
       });
     }
-
-    // 新規タイムレコーダー記録の追加
+  
     function handleNewTimeRecord(e) {
       e.preventDefault();
       const empNumber = getQueryParam("empNumber");
@@ -292,43 +658,35 @@
             target_time: recordTime,
             target_type: recordType
           };
+          if (recordType === "break_duration") {
+            const breakDurationInput = document.getElementById("break_duration").value;
+            const breakDuration = parseInt(breakDurationInput, 10);
+            payload.break_duration = isNaN(breakDuration) ? 0 : breakDuration;
+          }
           fetch("/api/saveWorkRecord", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
           })
-          .then(response => {
-            if (!response.ok) {
-              throw new Error("タイムレコーダー記録の追加に失敗しました");
-            }
-            return response.text();
-          })
-          .then(data => {
-            alert("記録が追加されました");
-            fetchTimeRecords();
-          })
-          .catch(error => {
-            alert(error.message);
-          });
+            .then(response => {
+              if (!response.ok) {
+                throw new Error("タイムレコーダー記録の追加に失敗しました");
+              }
+              return response.text();
+            })
+            .then(data => {
+              alert("記録が追加されました");
+              fetchTimeRecords();
+            })
+            .catch(error => {
+              alert(error.message);
+            });
         })
         .catch(error => {
           alert(error.message);
         });
     }
-
-    // debounce 関数
-    function debounce(func, wait) {
-      let timeout;
-      return function(...args) {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => func.apply(this, args), wait);
-      };
-    }
-    const debouncedSaveMemo = debounce(function(input, employeeId, targetDate, targetTime) {
-      const memo = input.value;
-      saveMemo(employeeId, targetDate, targetTime, memo);
-    }, 1000);
-
+  
     function deleteTimeRecord(employeeId, targetDate, targetTime, targetType) {
       if (!confirm("このタイムレコーダー記録を削除してもよろしいですか？")) {
         return;
@@ -358,8 +716,59 @@
         alert(error.message);
       });
     }
+  
+    function handleUpdateEmployee(e) {
+      e.preventDefault();
+      const empName = document.getElementById("emp_name").value;
+      const empJob = document.getElementById("emp_job").value;
+      const empPaidVacationLimit = document.getElementById("emp_paid_vacation_limit").value;
+      const empPaidVacationGrantDate = document.getElementById("emp_paid_vacation_grant_date").value;
+      const employmentType = document.querySelector('input[name="emp_employment_type"]:checked').value;
+      let hourlyWage = 0;
+      if(employmentType === "パート"){
+        hourlyWage = parseInt(document.getElementById("emp_hourly_wage").value, 10) || 0;
+      }
+  
+      const empNumber = getQueryParam("empNumber");
+      fetch(`/api/employeeDetail?empNumber=${empNumber}`)
+        .then(response => response.json())
+        .then(emp => {
+          const payload = {
+            id: emp.id,
+            name: empName,
+            job: empJob,
+            paid_vacation_limit: parseInt(empPaidVacationLimit, 10),
+            paid_vacation_grant_date: empPaidVacationGrantDate,
+            employment_type: employmentType,
+            hourly_wage: hourlyWage
+          };
+          return fetch("/api/updateEmployee", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+        })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error("従業員情報の更新に失敗しました");
+          }
+          return response.json();
+        })
+        .then(updatedEmp => {
+          alert("従業員情報が更新されました");
+          const newEmpNumber = updatedEmp.employee_number;
+          const currentUrl = new URL(window.location);
+          currentUrl.searchParams.set("empNumber", newEmpNumber);
+          window.history.replaceState({}, "", currentUrl);
+          toggleEdit();
+          fetchEmployeeDetail();
+        })
+        .catch(error => {
+          alert(error.message);
+        });
+    }
   </script>
-
+  
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
