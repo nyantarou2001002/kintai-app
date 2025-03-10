@@ -458,25 +458,29 @@ func employeeDetailHandler(w http.ResponseWriter, r *http.Request) {
 		} else {
 			emp.PaidVacationGrantLabel = "有給休暇付与日"
 
+			// paid_vacation_limitが未設定（-1）なら0として記録する
+			grantedDays := emp.PaidVacationLimit
+			if grantedDays == -1 {
+				grantedDays = 0
+			}
 			_, err := db.Exec("INSERT INTO paid_vacation_history (employee_id, grant_date, granted_days) VALUES (?, ?, ?)",
-				emp.ID, grantDate.Format("2006-01-02"), emp.PaidVacationLimit)
+				emp.ID, grantDate.Format("2006-01-02"), grantedDays)
 			if err != nil {
-				log.Println("Failed to record paid vacation history:", emp.ID, err)
+				log.Println("Failed to record paid vacation history for employee:", emp.ID, err)
 			}
 
 			newGrantDate := grantDate.AddDate(1, 0, 0)
 
-			// `paid_vacation_limit` を `-1` に設定
-			_, err = db.Exec("UPDATE employees SET paid_vacation_grant_date = ?, paid_vacation_limit = -1 WHERE id = ?",
+			// 次回付与日の更新時、paid_vacation_limitを0に設定する
+			_, err = db.Exec("UPDATE employees SET paid_vacation_grant_date = ?, paid_vacation_limit = 0 WHERE id = ?",
 				newGrantDate.Format("2006-01-02"), emp.ID)
 			if err != nil {
-				log.Println("Failed to update paid vacation grant date:", emp.ID, err)
+				log.Println("Failed to update paid vacation grant date for employee:", emp.ID, err)
 			} else {
 				emp.PaidVacationGrantDate = newGrantDate.Format("2006-01-02")
-				emp.PaidVacationLimit = -1
+				emp.PaidVacationLimit = 0
 			}
 		}
-
 	} else {
 		log.Println("Failed to parse paid_vacation_grant_date for employee:", emp.ID, err)
 	}
@@ -1147,6 +1151,43 @@ func saveWorkRecordHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Record saved successfully!"))
 }
 
+// 有給休暇付与履歴更新API
+func updatePaidVacationHistoryHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var payload struct {
+		ID          int `json:"id"`
+		GrantedDays int `json:"granted_days"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+	result, err := db.Exec("UPDATE paid_vacation_history SET granted_days = ? WHERE id = ?", payload.GrantedDays, payload.ID)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Println("Update Error in /api/updatePaidVacationHistory:", err)
+		return
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil || rowsAffected == 0 {
+		http.Error(w, "Record not found or update failed", http.StatusNotFound)
+		return
+	}
+	// 更新後のレコードを返す
+	var updated PaidVacationHistory
+	err = db.QueryRow("SELECT id, employee_id, grant_date, granted_days, record_timestamp FROM paid_vacation_history WHERE id = ?", payload.ID).
+		Scan(&updated.ID, &updated.EmployeeID, &updated.GrantDate, &updated.GrantedDays, &updated.RecordTimestamp)
+	if err != nil {
+		http.Error(w, "Failed to fetch updated record", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(updated)
+}
+
 func main() {
 	initDB()
 
@@ -1170,6 +1211,7 @@ func main() {
 	http.HandleFunc("/api/updateWorkRecord", updateWorkRecordHandler)
 	http.HandleFunc("/api/monthlySummary", monthlySummaryHandler)
 	http.HandleFunc("/api/jobSummary", jobSummaryHandler)
+	http.HandleFunc("/api/updatePaidVacationHistory", updatePaidVacationHistoryHandler)
 
 	// その後、静的ファイルサーバーを登録する
 	http.Handle("/", http.FileServer(http.Dir("./static")))

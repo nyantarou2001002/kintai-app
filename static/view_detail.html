@@ -132,6 +132,7 @@
       </table>
     </div>
 
+
     <!-- 月選択入力 -->
     <div class="mb-3">
       <label for="monthSelect" class="form-label">表示する月:</label>
@@ -349,23 +350,102 @@
             document.getElementById("emp_hourly_wage_container").style.display = "none";
           }
           
+          
           // 有給休暇付与履歴の反映
           const historyBody = document.getElementById("paidVacationHistoryBody");
           if (emp.paid_vacation_history && emp.paid_vacation_history.length > 0) {
             historyBody.innerHTML = "";
             emp.paid_vacation_history.forEach(history => {
               const tr = document.createElement("tr");
+
               const tdGrantDate = document.createElement("td");
               tdGrantDate.innerText = history.grant_date ? history.grant_date.substring(0, 10) : "";
+
               const tdGrantedDays = document.createElement("td");
-              tdGrantedDays.innerText = history.granted_days;
+              // 数値部分を span 要素にしてクリック可能にする
+              const spanGrantedDays = document.createElement("span");
+              spanGrantedDays.className = "granted-days";
+              spanGrantedDays.dataset.historyId = history.id;
+              spanGrantedDays.innerText = history.granted_days;
+              tdGrantedDays.appendChild(spanGrantedDays);
+
               tr.appendChild(tdGrantDate);
               tr.appendChild(tdGrantedDays);
               historyBody.appendChild(tr);
             });
+
+            // クリックイベントを付与
+            document.querySelectorAll(".granted-days").forEach(function(span) {
+              span.addEventListener("click", function() {
+                const currentValue = span.innerText;
+                const input = document.createElement("input");
+                input.type = "number";
+                input.value = currentValue;
+                input.style.width = "60px";
+                // 入力欄にフォーカス
+                span.parentNode.replaceChild(input, span);
+                input.focus();
+                // Enter キーでも確定
+                input.addEventListener("keydown", function(e) {
+                  if (e.key === "Enter") {
+                    input.blur();
+                  }
+                });
+                // フォーカスアウト時に更新
+                input.addEventListener("blur", function() {
+                  const newValue = input.value;
+                  if (newValue !== currentValue) {
+                    // API呼び出しで更新
+                    fetch("/api/updatePaidVacationHistory", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        id: parseInt(span.dataset.historyId, 10),
+                        granted_days: parseInt(newValue, 10)
+                      })
+                    })
+                    .then(response => {
+                      if (!response.ok) {
+                        throw new Error("更新に失敗しました");
+                      }
+                      return response.json();
+                    })
+                    .then(data => {
+                      // 更新後、span 要素に戻す
+                      const newSpan = document.createElement("span");
+                      newSpan.className = "granted-days";
+                      newSpan.dataset.historyId = data.id;
+                      newSpan.innerText = data.granted_days;
+                      input.parentNode.replaceChild(newSpan, input);
+                      // 再度クリックイベントを付与（再利用可能にする）
+                      newSpan.addEventListener("click", arguments.callee);
+                    })
+                    .catch(error => {
+                      alert(error.message);
+                      // エラー時は元の値に戻す
+                      const newSpan = document.createElement("span");
+                      newSpan.className = "granted-days";
+                      newSpan.dataset.historyId = span.dataset.historyId;
+                      newSpan.innerText = currentValue;
+                      input.parentNode.replaceChild(newSpan, input);
+                      newSpan.addEventListener("click", arguments.callee);
+                    });
+                  } else {
+                    // 変更がなければ元に戻す
+                    const newSpan = document.createElement("span");
+                    newSpan.className = "granted-days";
+                    newSpan.dataset.historyId = span.dataset.historyId;
+                    newSpan.innerText = currentValue;
+                    input.parentNode.replaceChild(newSpan, input);
+                    newSpan.addEventListener("click", arguments.callee);
+                  }
+                });
+              });
+            });
           } else {
             historyBody.innerHTML = '<tr><td colspan="2" class="text-center">有給休暇付与履歴はありません</td></tr>';
           }
+
         })
         .catch(error => {
           document.getElementById("employeeDetailsDisplay").innerText = error.message;
