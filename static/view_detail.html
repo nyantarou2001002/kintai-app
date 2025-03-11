@@ -61,9 +61,10 @@
         <p><strong>次回有給休暇付与日数:</strong> <span id="display_emp_paid_vacation_limit"></span></p>
         <p><strong>有給休暇付与予定日:</strong> <span id="display_emp_paid_vacation_grant_date"></span></p>
         <!-- 新規追加：有効な（2年以内の）有給休暇日数 -->
-        <p><strong>有効有休休暇日数:</strong> <span id="display_valid_paid_vacation_count"></span></p>
+        <p><strong>有休休暇日数:</strong> <span id="display_valid_paid_vacation_count"></span></p>
         <p><strong>現在の出勤回数:</strong> <span id="display_current_attendance_count"></span></p>
-        <p><strong>有給休暇取得数:</strong> <span id="display_paid_vacation_count"></span></p>
+        <p><strong><span id="selectedMonth"></span>の有給休暇取得数:</strong> <span id="display_paid_vacation_count_monthly"></span></p>
+        <p><strong>合計有給休暇取得数:</strong> <span id="display_paid_vacation_count"></span></p>
         <p><strong>雇用形態:</strong> <span id="display_emp_employment_type"></span></p>
         <p id="display_hourly_wage_container" style="display: none;"><strong>時給:</strong> <span id="display_hourly_wage"></span> 円</p>
         <button id="editButton" class="btn btn-primary" onclick="toggleEdit()">編集</button>
@@ -473,6 +474,11 @@
       let url = `/api/timeRecords?empNumber=${empNumber}`;
       if (month) {
         url += `&month=${month}`;
+        // 「表示する月」の表示を更新
+        const [year, mon] = month.split("-");
+        document.getElementById("selectedMonth").innerText = `${year}年${mon}月`;
+      } else {
+        document.getElementById("selectedMonth").innerText = "";
       }
       fetch(url)
         .then(response => {
@@ -498,8 +504,14 @@
           }
           if (!records || records.length === 0) {
             tbody.innerHTML = `<tr><td colspan="4" class="text-center">タイムレコーダー履歴がありません</td></tr>`;
+            // 取得件数が0の場合は月ごとの有給取得数も 0 とする
+            document.getElementById("display_paid_vacation_count_monthly").innerText = 0;
             return;
           }
+          // paid_vacation の件数をカウントする
+          let monthlyPaidVacationCount = records.filter(rec => rec.target_type === "paid_vacation").length;
+          document.getElementById("display_paid_vacation_count_monthly").innerText = monthlyPaidVacationCount;
+          
           const typeMap = {
             "clock_in": "出勤",
             "clock_out": "退勤",
@@ -513,18 +525,18 @@
             const datePart = rec.target_date.split("T")[0];
             const timeParts = rec.target_time.split(":");
             const timeStr = timeParts[0] + ":" + timeParts[1];
-  
+      
             const tr = document.createElement("tr");
-  
+      
             // 種別列
             const tdType = document.createElement("td");
             tdType.innerText = displayType;
             tr.appendChild(tdType);
-  
+      
             // 対象日時列
             const tdDateTime = document.createElement("td");
             const spanDateTime = document.createElement("span");
-  
+      
             if(rec.target_type === "break_duration") {
               spanDateTime.innerText = datePart + " " + (rec.break_duration != null ? rec.break_duration : "0") + "分";
               spanDateTime.style.cursor = "pointer";
@@ -614,10 +626,10 @@
                 input.focus();
               });
             }
-  
+      
             tdDateTime.appendChild(spanDateTime);
             tr.appendChild(tdDateTime);
-  
+      
             // メモ列
             const tdMemo = document.createElement("td");
             const memoInput = document.createElement("input");
@@ -629,7 +641,7 @@
             });
             tdMemo.appendChild(memoInput);
             tr.appendChild(tdMemo);
-  
+      
             // 操作列
             const tdOp = document.createElement("td");
             const delBtn = document.createElement("button");
@@ -640,7 +652,7 @@
             });
             tdOp.appendChild(delBtn);
             tr.appendChild(tdOp);
-  
+      
             document.getElementById("timeRecordsBody").appendChild(tr);
           });
         })
@@ -653,6 +665,8 @@
           }
         });
     }
+
+      
   
     function updateWorkRecord(payload, callback) {
       fetch("/api/updateWorkRecord", {

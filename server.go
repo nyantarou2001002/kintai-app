@@ -7,7 +7,10 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -103,35 +106,6 @@ func employeesHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(employees)
 }
-
-// 打刻情報を保存するAPI
-// func saveWorkRecordHandler(w http.ResponseWriter, r *http.Request) {
-// 	if r.Method != http.MethodPost {
-// 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-// 		return
-// 	}
-// 	var record WorkRecord
-// 	if err := json.NewDecoder(r.Body).Decode(&record); err != nil {
-// 		http.Error(w, "Bad request", http.StatusBadRequest)
-// 		log.Println("Decode Error:", err)
-// 		return
-// 	}
-// 	var breakDuration interface{}
-// 	if record.BreakDuration != nil {
-// 		breakDuration = *record.BreakDuration
-// 	} else {
-// 		breakDuration = nil
-// 	}
-// 	query := "INSERT INTO work_records (employee_id, target_date, target_time, target_type, break_duration) VALUES (?, ?, ?, ?, ?)"
-// 	_, err := db.Exec(query, record.EmployeeID, record.TargetDate, record.TargetTime, record.TargetType, breakDuration)
-// 	if err != nil {
-// 		http.Error(w, "Database error", http.StatusInternalServerError)
-// 		log.Println("Insert Error:", err)
-// 		return
-// 	}
-// 	w.Header().Set("Content-Type", "text/plain")
-// 	w.Write([]byte("Record saved successfully!"))
-// }
 
 // 従業員追加API
 func addEmployeeHandler(w http.ResponseWriter, r *http.Request) {
@@ -361,19 +335,28 @@ func setOwnerHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println("Decode Error:", err)
 		return
 	}
+
+	// bcrypt で新しいパスワードをハッシュ化
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(info.Password), bcrypt.DefaultCost)
+	if err != nil {
+		http.Error(w, "Error processing password", http.StatusInternalServerError)
+		log.Println("bcrypt error:", err)
+		return
+	}
+
 	query := `
 		UPDATE system_config
 		SET owner_email = ?, owner_password = ?
 		WHERE id = 1
 	`
-	_, err := db.Exec(query, info.Email, info.Password)
+	_, err = db.Exec(query, info.Email, string(hashedPassword))
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		log.Println("Update Error:", err)
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte("メールアドレスとパスワードを設定しました"))
+	w.Write([]byte("新たなパスワードを設定しました"))
 }
 
 // ログインAPI用構造体
@@ -393,8 +376,8 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println("Decode Error in /api/login:", err)
 		return
 	}
-	var storedPassword sql.NullString
-	err := db.QueryRow("SELECT owner_password FROM system_config WHERE id = 1").Scan(&storedPassword)
+	var storedHash string
+	err := db.QueryRow("SELECT owner_password FROM system_config WHERE id = 1").Scan(&storedHash)
 	if err == sql.ErrNoRows {
 		http.Error(w, "No password set", http.StatusUnauthorized)
 		log.Println("No password found in system_config")
@@ -404,16 +387,17 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println("Query Error in /api/login:", err)
 		return
 	}
-	if storedPassword.Valid && storedPassword.String == req.Password {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Login success"))
-	} else {
+
+	// bcrypt を使ってハッシュと入力パスワードを照合
+	if err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(req.Password)); err != nil {
 		http.Error(w, "Invalid password", http.StatusUnauthorized)
+		return
 	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Login success"))
 }
 
-// 従業員詳細情報取得API（修正済み）
-// 従業員詳細情報取得API（雇用形態、時給、paid_vacation_grant_date の自動更新対応）
 // 従業員詳細情報取得API（修正済み）
 func employeeDetailHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -845,15 +829,15 @@ func updateEmployeeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 type MonthlySummary struct {
-	EmpId                    int
-	EmpName                  string
-	TotalWorkMin             int
-	TotalNightShiftMin       int
-	AttendanceDays           int
-	RemainingAttendanceCount int
-	HolidayWorkMin           int
-	PaidVacationTaken        int
-	RemainingPaidVacation    int
+	EmpNumber                string `json:"emp_number"`
+	EmpName                  string `json:"emp_name"`
+	TotalWorkMin             int    `json:"total_work_min"`
+	TotalNightShiftMin       int    `json:"total_night_shift_min"`
+	AttendanceDays           int    `json:"attendance_days"`
+	RemainingAttendanceCount int    `json:"remaining_attendance_count"`
+	HolidayWorkMin           int    `json:"holiday_work_min"`
+	PaidVacationTaken        int    `json:"paid_vacation_taken"`
+	RemainingPaidVacation    int    `json:"remaining_paid_vacation"`
 }
 
 type JobSummary struct {
@@ -874,32 +858,95 @@ type ReportData struct {
 	SelectedReportType string
 }
 
-func getMonthlySummary() ([]MonthlySummary, error) {
+// 対象の年月（year, month）ごとに、各従業員の勤務日ごとに
+// 勤務時間（diff）と、夜勤時間（nightDiff）を算出し、全体を集計する関数
+func getMonthlySummary(year, month int) ([]MonthlySummary, error) {
 	query := `
-	SELECT e.id, e.name, COUNT(*) AS attendance_days
+	SELECT e.employee_number, e.name,
+	       SUM(work_diff) AS total_work_min,
+	       SUM(night_diff) AS total_night_shift_min,
+	       COUNT(*) AS attendance_days
 	FROM employees e
-	JOIN work_records w ON e.id = w.employee_id
-	WHERE w.target_type = 'clock_in'
-	  AND MONTH(w.target_date) = MONTH(CURRENT_DATE())
-	  AND YEAR(w.target_date) = YEAR(CURRENT_DATE())
-	GROUP BY e.id, e.name
+	JOIN (
+	  SELECT employee_id, target_date,
+	         TIMESTAMPDIFF(MINUTE,
+	           CONCAT(target_date, ' ', MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)),
+	           CONCAT(target_date, ' ', MAX(CASE WHEN target_type = 'clock_out' THEN target_time END))
+	         ) AS work_diff,
+	         CASE
+	           WHEN MAX(CASE WHEN target_type = 'clock_out' THEN target_time END) < MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)
+	           THEN
+	             GREATEST(0, TIMESTAMPDIFF(MINUTE,
+	               CONCAT(target_date, ' ', '22:00:00'),
+	               CONCAT(target_date, ' ', '24:00:00')
+	             ) - 
+	             CASE WHEN MIN(CASE WHEN target_type = 'clock_in' THEN target_time END) > '22:00:00'
+	                  THEN TIMESTAMPDIFF(MINUTE,
+	                    CONCAT(target_date, ' ', MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)),
+	                    CONCAT(target_date, ' ', '24:00:00')
+	                  )
+	                  ELSE 0
+	             END)
+	             +
+	             GREATEST(0, TIMESTAMPDIFF(MINUTE,
+	               CONCAT(DATE_ADD(target_date, INTERVAL 1 DAY), ' ', '00:00:00'),
+	               CONCAT(DATE_ADD(target_date, INTERVAL 1 DAY), ' ', LEAST(MAX(CASE WHEN target_type = 'clock_out' THEN target_time END), '05:00:00'))
+	             ))
+	           ELSE
+	             (
+	               CASE
+	                 WHEN MAX(CASE WHEN target_type = 'clock_out' THEN target_time END) > '22:00:00'
+	                   THEN TIMESTAMPDIFF(MINUTE,
+	                          CONCAT(target_date, ' ', '22:00:00'),
+	                          CONCAT(target_date, ' ', LEAST(MAX(CASE WHEN target_type = 'clock_out' THEN target_time END), '24:00:00'))
+	                        )
+	                 ELSE 0
+	               END
+	             )
+	             +
+	             (
+	               CASE
+	                 WHEN MIN(CASE WHEN target_type = 'clock_in' THEN target_time END) < '05:00:00'
+	                   THEN 
+	                     CASE
+	                       WHEN MAX(CASE WHEN target_type = 'clock_out' THEN target_time END) <= '05:00:00'
+	                         THEN TIMESTAMPDIFF(MINUTE,
+	                               CONCAT(target_date, ' ', MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)),
+	                               CONCAT(target_date, ' ', MAX(CASE WHEN target_type = 'clock_out' THEN target_time END))
+	                              )
+	                       WHEN MAX(CASE WHEN target_type = 'clock_out' THEN target_time END) > '05:00:00'
+	                         THEN TIMESTAMPDIFF(MINUTE,
+	                               CONCAT(target_date, ' ', MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)),
+	                               CONCAT(target_date, ' ', '05:00:00')
+	                              )
+	                       ELSE 0
+	                     END
+	                 ELSE 0
+	               END
+	             )
+	         END AS night_diff
+	  FROM work_records
+	  WHERE target_type IN ('clock_in','clock_out')
+	    AND MONTH(target_date) = ?
+	    AND YEAR(target_date) = ?
+	  GROUP BY employee_id, target_date
+	) t ON e.id = t.employee_id
+	GROUP BY e.employee_number, e.name
 	`
-	rows, err := db.Query(query)
+
+	// ※サブクエリ内で ? は2個しか使っていないので、パラメータは month, year の2個のみ渡す
+	rows, err := db.Query(query, month, year)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+
 	var summaries []MonthlySummary
 	for rows.Next() {
 		var s MonthlySummary
-		var days int
-		if err := rows.Scan(&s.EmpId, &s.EmpName, &days); err != nil {
+		if err := rows.Scan(&s.EmpNumber, &s.EmpName, &s.TotalWorkMin, &s.TotalNightShiftMin, &s.AttendanceDays); err != nil {
 			return nil, err
 		}
-		s.AttendanceDays = days
-		s.TotalWorkMin = days * 480
-		s.TotalNightShiftMin = 0
-		s.RemainingAttendanceCount = 20 - days
 		s.HolidayWorkMin = 0
 		s.PaidVacationTaken = 0
 		s.RemainingPaidVacation = 10
@@ -942,12 +989,41 @@ func getMonthlySummaryByJob() ([]JobSummary, error) {
 	return summaries, nil
 }
 
+// monthlySummaryHandler は、クエリパラメータ "month" が指定されている場合、その年月のデータを抽出します
 func monthlySummaryHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	summaries, err := getMonthlySummary()
+
+	// クエリパラメータ "month" を YYYY-MM 形式で取得
+	monthStr := r.URL.Query().Get("month")
+	var year, month int
+	if monthStr != "" {
+		parts := strings.Split(monthStr, "-")
+		if len(parts) != 2 {
+			http.Error(w, "Invalid month parameter", http.StatusBadRequest)
+			return
+		}
+		var err error
+		year, err = strconv.Atoi(parts[0])
+		if err != nil {
+			http.Error(w, "Invalid year in month parameter", http.StatusBadRequest)
+			return
+		}
+		month, err = strconv.Atoi(parts[1])
+		if err != nil {
+			http.Error(w, "Invalid month in month parameter", http.StatusBadRequest)
+			return
+		}
+	} else {
+		// 指定がない場合は現在の年月を利用
+		now := time.Now()
+		year = now.Year()
+		month = int(now.Month())
+	}
+
+	summaries, err := getMonthlySummary(year, month)
 	if err != nil {
 		http.Error(w, "Failed to get monthly summary", http.StatusInternalServerError)
 		return
@@ -1051,78 +1127,47 @@ func getPaidVacationHistory(employeeID int) ([]PaidVacationHistory, error) {
 
 // 有給休暇を使用する処理（FIFO順、2年以上前の分は無効）
 func usePaidVacation(employeeID int, useDays int) error {
-	// 現在のローカル時刻
 	now := time.Now().Local()
-	// 有効期限：2年前以降の付与のみを対象とする（例：2年前の日付）
 	validSince := now.AddDate(-2, 0, 0).Format("2006-01-02")
 
-	// 有効な有給休暇付与履歴を、古い付与日順に取得
-	rows, err := db.Query(`
-        SELECT id, granted_days 
-        FROM paid_vacation_history 
-        WHERE employee_id = ? AND grant_date >= ? 
-        ORDER BY grant_date ASC
-    `, employeeID, validSince)
+	// 2年以内に付与された合計有給日数を取得（履歴テーブルは更新しないので、ここは固定値）
+	var totalGranted int
+	err := db.QueryRow(`SELECT COALESCE(SUM(granted_days), 0) FROM paid_vacation_history WHERE employee_id = ? AND grant_date >= ?`, employeeID, validSince).Scan(&totalGranted)
 	if err != nil {
-		return fmt.Errorf("failed to query paid vacation history: %v", err)
-	}
-	defer rows.Close()
-
-	// 合計利用可能日数を集計
-	var totalAvailable int
-	type recordInfo struct {
-		id        int
-		remaining int
-	}
-	var records []recordInfo
-	for rows.Next() {
-		var id, days int
-		if err := rows.Scan(&id, &days); err != nil {
-			return fmt.Errorf("failed to scan paid vacation history: %v", err)
-		}
-		if days > 0 {
-			totalAvailable += days
-			records = append(records, recordInfo{id: id, remaining: days})
-		}
-	}
-	if totalAvailable < useDays {
-		return fmt.Errorf("利用可能な有給休暇が不足しています（利用可能日数: %d, 使用日数: %d）", totalAvailable, useDays)
+		return fmt.Errorf("failed to fetch total granted vacation: %v", err)
 	}
 
-	// 古いものから順に消化する
-	daysToDeduct := useDays
-	for _, rec := range records {
-		if daysToDeduct <= 0 {
-			break
-		}
-		var deduct int
-		if rec.remaining >= daysToDeduct {
-			deduct = daysToDeduct
-		} else {
-			deduct = rec.remaining
-		}
-		// 各レコードの granted_days を減算更新
-		_, err := db.Exec("UPDATE paid_vacation_history SET granted_days = granted_days - ? WHERE id = ?", deduct, rec.id)
-		if err != nil {
-			return fmt.Errorf("failed to update paid vacation history record (id=%d): %v", rec.id, err)
-		}
-		daysToDeduct -= deduct
+	// 使用済みの有給休暇（work_recordsテーブルの paid_vacation レコード件数）を取得
+	var totalUsed int
+	err = db.QueryRow(`SELECT COUNT(*) FROM work_records WHERE employee_id = ? AND target_type = 'paid_vacation'`, employeeID).Scan(&totalUsed)
+	if err != nil {
+		return fmt.Errorf("failed to fetch total used vacation: %v", err)
 	}
+
+	available := totalGranted - totalUsed
+	if available < useDays {
+		return fmt.Errorf("利用可能な有給休暇が不足しています（利用可能日数: %d, 使用日数: %d）", available, useDays)
+	}
+	// ここでは履歴テーブルは更新せず、利用可能な有給がある場合は nil を返す
 	return nil
 }
 
 // 打刻情報保存API（paid_vacationの場合、有給休暇使用処理を追加）
+// 打刻情報保存API（paid_vacationの場合、有給休暇使用処理を追加し、さらに
+// 同じ日に複数回の出勤または退勤記録が登録されないようにチェックします）
 func saveWorkRecordHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
 	var record WorkRecord
 	if err := json.NewDecoder(r.Body).Decode(&record); err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		log.Println("Decode Error:", err)
 		return
 	}
+
 	// 休憩時間の値
 	var breakDuration interface{}
 	if record.BreakDuration != nil {
@@ -1131,15 +1176,68 @@ func saveWorkRecordHandler(w http.ResponseWriter, r *http.Request) {
 		breakDuration = nil
 	}
 
-	// paid_vacationの場合、使用可能日数を消化する処理を実施（1打刻=1日使用とする）
-	if record.TargetType == "paid_vacation" {
-		// ここで有給休暇の使用処理を実行
+	// 同じ日の打刻がすでに登録されているかチェック
+	switch record.TargetType {
+	// 出勤、退勤の場合は、その日の同じ種別の記録が既にあると拒否
+	case "clock_in", "clock_out":
+		var count int
+		err := db.QueryRow(
+			"SELECT COUNT(*) FROM work_records WHERE employee_id = ? AND target_date = ? AND target_type = ?",
+			record.EmployeeID, record.TargetDate, record.TargetType,
+		).Scan(&count)
+		if err != nil {
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			log.Println("Clock in/out Check Error:", err)
+			return
+		}
+		if count > 0 {
+			http.Error(w, "同じ日に複数回の出勤または退勤記録はできません", http.StatusBadRequest)
+			return
+		}
+
+	// 有給休暇の場合は、既にその日の有給休暇記録があるかチェック
+	case "paid_vacation":
+		var count int
+		err := db.QueryRow(
+			"SELECT COUNT(*) FROM work_records WHERE employee_id = ? AND target_date = ? AND target_type = 'paid_vacation'",
+			record.EmployeeID, record.TargetDate,
+		).Scan(&count)
+		if err != nil {
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			log.Println("Paid Vacation Check Error:", err)
+			return
+		}
+		if count > 0 {
+			http.Error(w, "同じ日に有給休暇はすでに設定されています", http.StatusBadRequest)
+			return
+		}
+		// 有給休暇が使用可能かチェック（履歴は更新せずに利用可能日数だけ確認）
 		if err := usePaidVacation(record.EmployeeID, 1); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
+	// その他の記録（例：休憩開始、休憩終了、休憩時間など）
+	default:
+		// ※必要に応じて他の種別についてのチェックを追加可能
+		// ここでは、有給休暇記録がある場合はその他の記録も追加できないという既存の仕様を維持
+		var count int
+		err := db.QueryRow(
+			"SELECT COUNT(*) FROM work_records WHERE employee_id = ? AND target_date = ? AND target_type = 'paid_vacation'",
+			record.EmployeeID, record.TargetDate,
+		).Scan(&count)
+		if err != nil {
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			log.Println("Paid Vacation Check Error:", err)
+			return
+		}
+		if count > 0 {
+			http.Error(w, "有給休暇取得済みのため、その他の打刻は追加できません", http.StatusBadRequest)
+			return
+		}
 	}
 
+	// work_recordsテーブルに新規記録を追加
 	query := "INSERT INTO work_records (employee_id, target_date, target_time, target_type, break_duration) VALUES (?, ?, ?, ?, ?)"
 	_, err := db.Exec(query, record.EmployeeID, record.TargetDate, record.TargetTime, record.TargetType, breakDuration)
 	if err != nil {
@@ -1188,6 +1286,48 @@ func updatePaidVacationHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(updated)
 }
 
+// 新規追加：秘密の合言葉を使ったパスワード再設定ハンドラー
+func secretResetHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		NewPassword  string `json:"new_password"`
+		SecretAnswer string `json:"secret_answer"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		log.Println("Decode Error in /api/secretReset:", err)
+		return
+	}
+
+	// 正解は "Pちゃん"
+	if req.SecretAnswer != "Pちゃん" {
+		http.Error(w, "秘密の合言葉が間違っています", http.StatusUnauthorized)
+		return
+	}
+
+	// bcryptで新しいパスワードをハッシュ化
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		http.Error(w, "Error processing password", http.StatusInternalServerError)
+		log.Println("bcrypt error in secretResetHandler:", err)
+		return
+	}
+
+	// email は既存のものをそのまま使うか、必要に応じて更新してください
+	query := "UPDATE system_config SET owner_password = ? WHERE id = 1"
+	_, err = db.Exec(query, string(hashedPassword))
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Println("Update Error in /api/secretReset:", err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain")
+	w.Write([]byte("パスワードが再設定されました"))
+}
+
 func main() {
 	initDB()
 
@@ -1212,6 +1352,7 @@ func main() {
 	http.HandleFunc("/api/monthlySummary", monthlySummaryHandler)
 	http.HandleFunc("/api/jobSummary", jobSummaryHandler)
 	http.HandleFunc("/api/updatePaidVacationHistory", updatePaidVacationHistoryHandler)
+	http.HandleFunc("/api/secretReset", secretResetHandler)
 
 	// その後、静的ファイルサーバーを登録する
 	http.Handle("/", http.FileServer(http.Dir("./static")))

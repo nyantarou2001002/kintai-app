@@ -60,6 +60,13 @@
 </head>
 <body>
   <div class="container container-custom my-4">
+
+    <!-- 月選択入力 -->
+    <div class="mb-3">
+      <label for="monthSelect" class="form-label">表示する年月:</label>
+      <input type="month" id="monthSelect" class="form-control" onchange="fetchMonthlySummary()">
+    </div>
+
     <h2 class="header-title mb-4">月次勤怠レポート</h2>
     <!-- 月次勤怠レポート -->
     <div class="mb-5">
@@ -71,10 +78,11 @@
             <th>合計勤務時間(分)</th>
             <th>合計夜勤時間(分)</th>
             <th>出勤日数</th>
-            <th>残り出勤日数</th>
             <th>休日出勤の時間(分)</th>
-            <th>有給取得日数</th>
+            <th>今月の有給取得日数</th>
+            <th>合計有給取得日数</th>
             <th>残り有給日数</th>
+            <th>月給</th>
           </tr>
         </thead>
         <tbody id="monthlySummaryTableBody">
@@ -93,11 +101,8 @@
             <th>職種名</th>
             <th>合計勤務時間(分)</th>
             <th>合計夜勤時間(分)</th>
-            <th>出勤日数</th>
-            <th>残り出勤日数</th>
             <th>休日出勤の時間(分)</th>
-            <th>有給取得日数</th>
-            <th>残り有給日数</th>
+            <th>月給</th>
           </tr>
         </thead>
         <tbody id="jobSummaryTableBody">
@@ -125,66 +130,66 @@
       <a href="view_home.html" class="btn btn-primary">ホーム画面に戻る</a>
     </div>
   </div>
-  <!-- Bootstrap 5 JS Bundle -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    // 月次勤怠レポートのデータを取得する関数
+    // 月次勤怠レポートデータを取得しテーブルに表示する
     function fetchMonthlySummary() {
-      fetch('/api/monthlySummary')
-        .then(response => {
-          if (!response.ok) {
-            throw new Error('月次勤怠レポートの取得に失敗しました: ' + response.status);
-          }
-          return response.json();
-        })
-        .then(data => {
-          // dataがnullの場合は空配列に置き換え
-          if (!data) { data = []; }
-          const tableBody = document.getElementById('monthlySummaryTableBody');
-          tableBody.innerHTML = '';
-          if (data.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="9" class="text-center">対象データがありません</td></tr>';
-          } else {
+        fetch('/api/monthlySummary')
+          .then(response => {
+            if (!response.ok) {
+              throw new Error('月次勤怠レポートの取得に失敗しました');
+            }
+            return response.json();
+          })
+          .then(data => {
+            const tableBody = document.getElementById('monthlySummaryTableBody');
+            tableBody.innerHTML = "";
+            if (!data || data.length === 0) {  // data が null または配列の長さが 0 の場合
+              tableBody.innerHTML = `<tr><td colspan="10" class="text-center">情報がありません</td></tr>`;
+              return;
+            }
             data.forEach(item => {
               const tr = document.createElement('tr');
               tr.innerHTML = `
-                <td>${item.EmpId}</td>
-                <td>${item.EmpName}</td>
-                <td>${item.TotalWorkMin}</td>
-                <td>${item.TotalNightShiftMin}</td>
-                <td>${item.AttendanceDays}</td>
-                <td>${item.RemainingAttendanceCount}</td>
-                <td>${item.HolidayWorkMin}</td>
-                <td>${item.PaidVacationTaken}</td>
-                <td>${item.RemainingPaidVacation}</td>
-              `;
+              <td>${item.emp_number}</td>
+              <td>${item.emp_name}</td>
+              <td>${item.total_work_min}</td>
+              <td>${item.total_night_shift_min}</td>
+              <td>${item.attendance_days}</td>
+              <td>${item.holiday_work_min}</td>
+              <td>${item.paid_vacation_taken}</td>
+              <td>${item.paid_vacation_taken}</td>
+              <td>${item.remaining_paid_vacation}</td>
+              <td>未計算</td>
+            `;
+
+
               tableBody.appendChild(tr);
             });
-          }
-        })
-        .catch(error => {
-          console.error('Error fetching monthly summary:', error);
-          document.getElementById('monthlySummaryTableBody').innerHTML = `<tr><td colspan="9" class="text-center">エラーが発生しました: ${error.message}</td></tr>`;
-        });
-    }
+          })
+          .catch(error => {
+            const tableBody = document.getElementById('monthlySummaryTableBody');
+            tableBody.innerHTML = `<tr><td colspan="10" class="text-center">情報がありません</td></tr>`;
+            console.error(error);
+          });
+      }
 
-    // 職種別勤怠レポートのデータを取得する関数
+    
+    // 職種別勤怠レポートの取得はそのまま（参考例）
     function fetchJobSummary() {
-      fetch('/api/jobSummary')
-        .then(response => {
-          if (!response.ok) {
-            throw new Error('職種別勤怠レポートの取得に失敗しました: ' + response.status);
-          }
-          return response.json();
-        })
-        .then(data => {
-          // dataがnullの場合は空配列に置き換え
-          if (!data) { data = []; }
-          const tableBody = document.getElementById('jobSummaryTableBody');
-          tableBody.innerHTML = '';
-          if (data.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="9" class="text-center">対象データがありません</td></tr>';
-          } else {
+        fetch('/api/jobSummary')
+          .then(response => {
+            if (!response.ok) {
+              throw new Error('職種別勤怠レポートの取得に失敗しました');
+            }
+            return response.json();
+          })
+          .then(data => {
+            const tableBody = document.getElementById('jobSummaryTableBody');
+            tableBody.innerHTML = "";
+            if (!data || data.length === 0) {
+              tableBody.innerHTML = `<tr><td colspan="6" class="text-center">情報がありません</td></tr>`;
+              return;
+            }
             data.forEach(item => {
               const tr = document.createElement('tr');
               tr.innerHTML = `
@@ -192,37 +197,35 @@
                 <td>${item.JobName}</td>
                 <td>${item.TotalWorkMin}</td>
                 <td>${item.TotalNightShiftMin}</td>
-                <td>${item.AttendanceDays}</td>
-                <td>${item.RemainingAttendanceCount}</td>
                 <td>${item.HolidayWorkMin}</td>
-                <td>${item.PaidVacationTaken}</td>
-                <td>${item.RemainingPaidVacation}</td>
+                <td>未計算</td>
               `;
               tableBody.appendChild(tr);
             });
-          }
-        })
-        .catch(error => {
-          console.error('Error fetching job summary:', error);
-          document.getElementById('jobSummaryTableBody').innerHTML = `<tr><td colspan="9" class="text-center">エラーが発生しました: ${error.message}</td></tr>`;
-        });
-    }
+          })
+          .catch(error => {
+            const tableBody = document.getElementById('jobSummaryTableBody');
+            tableBody.innerHTML = `<tr><td colspan="6" class="text-center">情報がありません</td></tr>`;
+            console.error(error);
+          });
+      }
 
-    // 出力レポートリンクの更新（例）
-    function updateExportLink() {
-      const reportType = document.getElementById('reportTypeSelect').value;
-      const exportLink = document.getElementById('exportLink');
-      exportLink.href = `/export?format=XLSX&type=${reportType}`;
-    }
-
-    // 初期処理
+    
+    // ページ読み込み時にデフォルトで現在年月を設定してレポートを取得
     window.addEventListener('load', function() {
+      // 現在年月 (YYYY-MM) を取得してセット
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = ("0" + (now.getMonth() + 1)).slice(-2);
+      document.getElementById("monthSelect").value = `${year}-${month}`;
       fetchMonthlySummary();
       fetchJobSummary();
-      updateExportLink();
     });
-
-    document.getElementById('reportTypeSelect').addEventListener('change', updateExportLink);
   </script>
+  
+  
+  <!-- Bootstrap 5 JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  
 </body>
 </html>
