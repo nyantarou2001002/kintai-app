@@ -154,43 +154,49 @@
               return;
             }
             data.forEach(item => {
-              // 各数値データの整形
-              const hours = Math.floor(item.total_work_min / 60);
-              const mins = item.total_work_min % 60;
-              const workTimeFormatted = `${hours}時間${mins}分 (${item.total_work_min}分)`;
+              // もし雇用形態が「正社員」なら、対象以外の項目を空文字にする
+              if(item.employment_type === "正社員"){
+                item.hourly_wage = "";
+                item.total_work_min = "";
+                item.total_night_shift_min = "";
+                item.attendance_days = "";
+                item.transportation_expense = "";
+                item.monthly_salary = "";
+              } else {
+                // 数値データは整形
+                const hours = Math.floor(item.total_work_min / 60);
+                const mins = item.total_work_min % 60;
+                item.workTimeFormatted = `${hours}時間${mins}分 (${item.total_work_min}分)`;
 
-              const nightHours = Math.floor(item.total_night_shift_min / 60);
-              const nightMins = item.total_night_shift_min % 60;
-              const nightTimeFormatted = `${nightHours}時間${nightMins}分 (${item.total_night_shift_min}分)`;
+                const nightHours = Math.floor(item.total_night_shift_min / 60);
+                const nightMins = item.total_night_shift_min % 60;
+                item.nightTimeFormatted = `${nightHours}時間${nightMins}分 (${item.total_night_shift_min}分)`;
+              }
 
-              const monthlySalaryFormatted = item.monthly_salary; // すでに計算済み
-
-              // 交通費往復（1日あたりの交通費＝ transportation_expense）
+              // 交通費計算（1日あたりの交通費×出勤日数）
               const transportationRoundTrip = item.transportation_expense || 0;
-              // 交通費（1日あたりの交通費×出勤日数）
               const transportationCost = transportationRoundTrip * (item.attendance_days || 0);
 
-              // ※memo 入力欄に既存の memo 値（item.memo）を value 属性に設定する
-              // memo入力欄（既存のmemoがundefinedの場合は空文字を表示）
-            const memoInput = `<input type="text" class="monthly-memo" data-emp-id="${item.emp_id}" data-month="${month}" value="${item.memo || ''}" placeholder="メモを入力" onblur="saveMonthlyMemo(this)" />`;
-
+              // memo 入力欄の生成（常に表示）
+              const memoInput = `<input type="text" class="monthly-memo" data-emp-id="${item.emp_id}" data-month="${month}" value="${item.memo || ''}" placeholder="メモを入力" onblur="saveMonthlyMemo(this)" />`;
 
               const tr = document.createElement('tr');
               tr.innerHTML = `
                 <td>${item.emp_number || '-'}</td>
                 <td>${item.emp_name || '-'}</td>
-                <td>${item.hourly_wage || 0}円</td>
-                <td>${workTimeFormatted}</td>
-                <td>${nightTimeFormatted}</td>
-                <td>${item.attendance_days || 0}日</td>
-                <td>${transportationRoundTrip}円</td>
-                <td>${transportationCost}円</td>
+                <td>${item.hourly_wage || ''}${item.hourly_wage !== "" ? "円" : ""}</td>
+                <td>${item.workTimeFormatted || ''}</td>
+                <td>${item.nightTimeFormatted || ''}</td>
+                <td>${item.attendance_days || ''}${item.attendance_days !== "" ? "日" : ""}</td>
+                <td>${transportationRoundTrip || ''}${transportationRoundTrip !== "" ? "円" : ""}</td>
+                <td>${transportationCost || ''}${transportationCost !== "" ? "円" : ""}</td>
                 <td>${item.paid_vacation_taken || 0}日</td>
-                <td>${monthlySalaryFormatted}</td>
+                <td>${item.monthly_salary || ''}${item.monthly_salary !== "" ? "円" : ""}</td>
                 <td>${memoInput}</td>
               `;
               tableBody.appendChild(tr);
             });
+
           })
           .catch(error => {
             console.error('Error:', error);

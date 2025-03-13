@@ -860,6 +860,7 @@ type MonthlySummary struct {
 	EmpID                 int    `json:"emp_id"`
 	EmpNumber             string `json:"emp_number"`
 	EmpName               string `json:"emp_name"`
+	EmploymentType        string `json:"employment_type"` // 追加
 	HourlyWage            int    `json:"hourly_wage"`
 	TransportationExpense int    `json:"transportation_expense"`
 	TotalWorkMin          int    `json:"total_work_min"`
@@ -901,6 +902,7 @@ func getMonthlySummary(year, month int) ([]MonthlySummary, error) {
         e.employee_number, 
         e.name, 
         e.id, 
+        e.employment_type,
         e.hourly_wage, 
         e.transportation_expense,
         COALESCE(SUM(wrd.work_diff), 0) AS total_work_min,
@@ -996,7 +998,7 @@ func getMonthlySummary(year, month int) ([]MonthlySummary, error) {
           AND YEAR(target_date) = ?
         GROUP BY employee_id, target_date
     ) wrd ON e.id = wrd.employee_id
-    GROUP BY e.id, e.employee_number, e.name, e.hourly_wage, e.transportation_expense
+    GROUP BY e.id, e.employee_number, e.name, e.employment_type, e.hourly_wage, e.transportation_expense
 	`
 
 	// パラメータの順番:
@@ -1015,7 +1017,7 @@ func getMonthlySummary(year, month int) ([]MonthlySummary, error) {
 		var s MonthlySummary
 		var empID int
 		var totalExtraMin int
-		if err := rows.Scan(&s.EmpNumber, &s.EmpName, &empID, &s.HourlyWage, &s.TransportationExpense, &s.TotalWorkMin, &s.TotalNightShiftMin, &totalExtraMin, &s.AttendanceDays, &s.PaidVacationTaken, &s.Memo); err != nil {
+		if err := rows.Scan(&s.EmpNumber, &s.EmpName, &empID, &s.EmploymentType, &s.HourlyWage, &s.TransportationExpense, &s.TotalWorkMin, &s.TotalNightShiftMin, &totalExtraMin, &s.AttendanceDays, &s.PaidVacationTaken, &s.Memo); err != nil {
 			log.Printf("Scan error in getMonthlySummary: %v", err)
 			return nil, err
 		}
