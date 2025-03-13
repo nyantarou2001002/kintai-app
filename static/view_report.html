@@ -218,27 +218,28 @@
           const tableBody = document.getElementById('jobSummaryTableBody');
           tableBody.innerHTML = "";
           if (!data || data.length === 0) {
-            tableBody.innerHTML = `<tr><td colspan="6" class="text-center">情報がありません</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="5" class="text-center">情報がありません</td></tr>`;
             return;
           }
           data.forEach(item => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
               <td>${item.job_code}</td>
-              <td>${item.job}</td>
+              <td>${item.job_name}</td>
               <td>${item.total_work_min}</td>
               <td>${item.total_night_shift_min}</td>
-              <td>未計算</td>
+              <td>${item.monthly_salary}</td>
             `;
             tableBody.appendChild(tr);
           });
         })
         .catch(error => {
           const tableBody = document.getElementById('jobSummaryTableBody');
-          tableBody.innerHTML = `<tr><td colspan="6" class="text-center">情報がありません</td></tr>`;
+          tableBody.innerHTML = `<tr><td colspan="5" class="text-center">情報がありません</td></tr>`;
           console.error(error);
         });
     }
+
 
     // 月次メモ保存関数（blurイベント時に呼ばれる）
     function saveMonthlyMemo(input) {

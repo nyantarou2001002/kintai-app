@@ -873,16 +873,13 @@ type MonthlySummary struct {
 	Memo                  string `json:"memo"`
 }
 
+// JobSummary は職種別の集計結果を表します。
 type JobSummary struct {
-	JobCode                  string
-	JobName                  string
-	TotalWorkMin             int
-	TotalNightShiftMin       int
-	AttendanceDays           int
-	RemainingAttendanceCount int
-	HolidayWorkMin           int
-	PaidVacationTaken        int
-	RemainingPaidVacation    int
+	JobCode            string `json:"job_code"`
+	JobName            string `json:"job_name"`
+	TotalWorkMin       int    `json:"total_work_min"`
+	TotalNightShiftMin int    `json:"total_night_shift_min"`
+	MonthlySalary      int    `json:"monthly_salary"`
 }
 
 type ReportData struct {
@@ -1066,38 +1063,69 @@ func getMonthlySummary(year, month int) ([]MonthlySummary, error) {
 	return summaries, nil
 }
 
-func getMonthlySummaryByJob() ([]JobSummary, error) {
-	query := `
-	SELECT e.job_code, e.job, COUNT(*) AS attendance_days
-	FROM employees e
-	JOIN work_records w ON e.id = w.employee_id
-	WHERE w.target_type = 'clock_in'
-	  AND MONTH(w.target_date) = MONTH(CURRENT_DATE())
-	  AND YEAR(w.target_date) = YEAR(CURRENT_DATE())
-	GROUP BY e.job_code, e.job
-	`
-	rows, err := db.Query(query)
+// getMonthlySummaryByJob は、指定年月の月次勤怠レポート（getMonthlySummary の結果）から
+// 雇用形態が「パート」の従業員のみを対象に、職種コード（従業員番号の先頭2文字）ごとに
+// 合計勤務時間、合計夜勤時間、月給を集計して返します。
+func getMonthlySummaryByJob(year, month int) ([]JobSummary, error) {
+	// まず、既存の getMonthlySummary を呼び出して当月の月次勤怠レポートを取得
+	monthlySummaries, err := getMonthlySummary(year, month)
+	if err != nil {
+		return nil, err
+	}
+
+	// 集計用マップ：キーは職種コード（従業員番号の先頭2文字）
+	aggregation := make(map[string]*JobSummary)
+	for _, ms := range monthlySummaries {
+		// 対象は雇用形態が「パート」のみ
+		if ms.EmploymentType == "パート" {
+			// 従業員番号の先頭2文字を職種コードとする（例："01"）
+			if len(ms.EmpNumber) < 2 {
+				continue // 想定外のデータはスキップ
+			}
+			jobCode := ms.EmpNumber[:2]
+			js, exists := aggregation[jobCode]
+			if !exists {
+				js = &JobSummary{
+					JobCode:            jobCode,
+					TotalWorkMin:       0,
+					TotalNightShiftMin: 0,
+					MonthlySalary:      0,
+				}
+				aggregation[jobCode] = js
+			}
+			js.TotalWorkMin += ms.TotalWorkMin
+			js.TotalNightShiftMin += ms.TotalNightShiftMin
+			js.MonthlySalary += ms.MonthlySalary
+		}
+	}
+
+	// job_types テーブルから、職種コード→職種名のマッピングを取得
+	rows, err := db.Query("SELECT code, name FROM job_types")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var summaries []JobSummary
+	jobTypeMap := make(map[string]string)
 	for rows.Next() {
-		var s JobSummary
-		var days int
-		if err := rows.Scan(&s.JobCode, &s.JobName, &days); err != nil {
+		var code, name string
+		if err := rows.Scan(&code, &name); err != nil {
 			return nil, err
 		}
-		s.AttendanceDays = days
-		s.TotalWorkMin = days * 480
-		s.TotalNightShiftMin = 0
-		s.RemainingAttendanceCount = 20 - days
-		s.HolidayWorkMin = 0
-		s.PaidVacationTaken = 0
-		s.RemainingPaidVacation = 10
-		summaries = append(summaries, s)
+		jobTypeMap[code] = name
 	}
-	return summaries, nil
+
+	// 集計結果に職種名を設定し、スライスに変換
+	var jobSummaries []JobSummary
+	for code, js := range aggregation {
+		if jobName, ok := jobTypeMap[code]; ok {
+			js.JobName = jobName
+		} else {
+			js.JobName = ""
+		}
+		jobSummaries = append(jobSummaries, *js)
+	}
+
+	return jobSummaries, nil
 }
 
 // monthlySummaryHandler は、クエリパラメータ "month" が指定されている場合、その年月のデータを抽出します
@@ -1137,17 +1165,39 @@ func monthlySummaryHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func jobSummaryHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
+	// URLクエリパラメータ "month" を "YYYY-MM" 形式で取得（無い場合は当月）
+	monthStr := r.URL.Query().Get("month")
+	var year, month int
+	if monthStr != "" {
+		parts := strings.Split(monthStr, "-")
+		if len(parts) != 2 {
+			http.Error(w, "Invalid month parameter", http.StatusBadRequest)
+			return
+		}
+		var err error
+		year, err = strconv.Atoi(parts[0])
+		if err != nil {
+			http.Error(w, "Invalid year in month parameter", http.StatusBadRequest)
+			return
+		}
+		month, err = strconv.Atoi(parts[1])
+		if err != nil {
+			http.Error(w, "Invalid month in month parameter", http.StatusBadRequest)
+			return
+		}
+	} else {
+		now := time.Now()
+		year = now.Year()
+		month = int(now.Month())
 	}
-	summaries, err := getMonthlySummaryByJob()
+
+	jobSummaries, err := getMonthlySummaryByJob(year, month)
 	if err != nil {
 		http.Error(w, "Failed to get job summary", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(summaries)
+	json.NewEncoder(w).Encode(jobSummaries)
 }
 
 // 【新規追加】タイムレコーダー記録更新API
