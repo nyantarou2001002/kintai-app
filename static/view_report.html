@@ -56,6 +56,11 @@
     .table-striped tbody tr:nth-of-type(even) {
       background-color: #ebf3ff;
     }
+    /* 月次メモ用入力欄 */
+    .monthly-memo {
+      width: 100%;
+      box-sizing: border-box;
+    }
   </style>
 </head>
 <body>
@@ -75,14 +80,15 @@
           <tr>
             <th>従業員ID</th>
             <th>従業員名</th>
+            <th>時給</th>
             <th>合計勤務時間(分)</th>
             <th>合計夜勤時間(分)</th>
             <th>出勤日数</th>
-            <th>休日出勤の時間(分)</th>
+            <th>交通費往復</th>
+            <th>交通費</th>
             <th>今月の有給取得日数</th>
-            <th>合計有給取得日数</th>
-            <th>残り有給日数</th>
             <th>月給</th>
+            <th>メモ</th>
           </tr>
         </thead>
         <tbody id="monthlySummaryTableBody">
@@ -101,7 +107,6 @@
             <th>職種名</th>
             <th>合計勤務時間(分)</th>
             <th>合計夜勤時間(分)</th>
-            <th>休日出勤の時間(分)</th>
             <th>月給</th>
           </tr>
         </thead>
@@ -131,9 +136,10 @@
     </div>
   </div>
   <script>
-    // 月次勤怠レポートデータを取得しテーブルに表示する
-    function fetchMonthlySummary() {
-        fetch('/api/monthlySummary')
+      // 月次勤怠レポートデータを取得しテーブルに表示する
+      function fetchMonthlySummary() {
+        const month = document.getElementById("monthSelect").value;
+        fetch('/api/monthlySummary?month=' + month)
           .then(response => {
             if (!response.ok) {
               throw new Error('月次勤怠レポートの取得に失敗しました');
@@ -143,86 +149,127 @@
           .then(data => {
             const tableBody = document.getElementById('monthlySummaryTableBody');
             tableBody.innerHTML = "";
-            if (!data || data.length === 0) {  // data が null または配列の長さが 0 の場合
-              tableBody.innerHTML = `<tr><td colspan="10" class="text-center">情報がありません</td></tr>`;
-              return;
-            }
-            data.forEach(item => {
-              const tr = document.createElement('tr');
-              tr.innerHTML = `
-              <td>${item.emp_number}</td>
-              <td>${item.emp_name}</td>
-              <td>${item.total_work_min}</td>
-              <td>${item.total_night_shift_min}</td>
-              <td>${item.attendance_days}</td>
-              <td>${item.holiday_work_min}</td>
-              <td>${item.paid_vacation_taken}</td>
-              <td>${item.paid_vacation_taken}</td>
-              <td>${item.remaining_paid_vacation}</td>
-              <td>未計算</td>
-            `;
-
-
-              tableBody.appendChild(tr);
-            });
-          })
-          .catch(error => {
-            const tableBody = document.getElementById('monthlySummaryTableBody');
-            tableBody.innerHTML = `<tr><td colspan="10" class="text-center">情報がありません</td></tr>`;
-            console.error(error);
-          });
-      }
-
-    
-    // 職種別勤怠レポートの取得はそのまま（参考例）
-    function fetchJobSummary() {
-        fetch('/api/jobSummary')
-          .then(response => {
-            if (!response.ok) {
-              throw new Error('職種別勤怠レポートの取得に失敗しました');
-            }
-            return response.json();
-          })
-          .then(data => {
-            const tableBody = document.getElementById('jobSummaryTableBody');
-            tableBody.innerHTML = "";
             if (!data || data.length === 0) {
-              tableBody.innerHTML = `<tr><td colspan="6" class="text-center">情報がありません</td></tr>`;
+              tableBody.innerHTML = `<tr><td colspan="11" class="text-center">情報がありません</td></tr>`;
               return;
             }
             data.forEach(item => {
+              // 各数値データの整形
+              const hours = Math.floor(item.total_work_min / 60);
+              const mins = item.total_work_min % 60;
+              const workTimeFormatted = `${hours}時間${mins}分 (${item.total_work_min}分)`;
+
+              const nightHours = Math.floor(item.total_night_shift_min / 60);
+              const nightMins = item.total_night_shift_min % 60;
+              const nightTimeFormatted = `${nightHours}時間${nightMins}分 (${item.total_night_shift_min}分)`;
+
+              const monthlySalaryFormatted = item.monthly_salary; // すでに計算済み
+
+              // 交通費往復（1日あたりの交通費＝ transportation_expense）
+              const transportationRoundTrip = item.transportation_expense || 0;
+              // 交通費（1日あたりの交通費×出勤日数）
+              const transportationCost = transportationRoundTrip * (item.attendance_days || 0);
+
+              // ※memo 入力欄に既存の memo 値（item.memo）を value 属性に設定する
+              // memo入力欄（既存のmemoがundefinedの場合は空文字を表示）
+            const memoInput = `<input type="text" class="monthly-memo" data-emp-id="${item.emp_id}" data-month="${month}" value="${item.memo || ''}" placeholder="メモを入力" onblur="saveMonthlyMemo(this)" />`;
+
+
               const tr = document.createElement('tr');
               tr.innerHTML = `
-                <td>${item.JobCode}</td>
-                <td>${item.JobName}</td>
-                <td>${item.TotalWorkMin}</td>
-                <td>${item.TotalNightShiftMin}</td>
-                <td>${item.HolidayWorkMin}</td>
-                <td>未計算</td>
+                <td>${item.emp_number || '-'}</td>
+                <td>${item.emp_name || '-'}</td>
+                <td>${item.hourly_wage || 0}円</td>
+                <td>${workTimeFormatted}</td>
+                <td>${nightTimeFormatted}</td>
+                <td>${item.attendance_days || 0}日</td>
+                <td>${transportationRoundTrip}円</td>
+                <td>${transportationCost}円</td>
+                <td>${item.paid_vacation_taken || 0}日</td>
+                <td>${monthlySalaryFormatted}</td>
+                <td>${memoInput}</td>
               `;
               tableBody.appendChild(tr);
             });
           })
           .catch(error => {
-            const tableBody = document.getElementById('jobSummaryTableBody');
-            tableBody.innerHTML = `<tr><td colspan="6" class="text-center">情報がありません</td></tr>`;
-            console.error(error);
+            console.error('Error:', error);
+            const tableBody = document.getElementById('monthlySummaryTableBody');
+            tableBody.innerHTML = `<tr><td colspan="11" class="text-center">情報がありません</td></tr>`;
           });
       }
+    // 職種別勤怠レポートの取得はそのまま
+    function fetchJobSummary() {
+      const month = document.getElementById("monthSelect").value;
+      fetch('/api/jobSummary?month=' + month)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('職種別勤怠レポートの取得に失敗しました');
+          }
+          return response.json();
+        })
+        .then(data => {
+          const tableBody = document.getElementById('jobSummaryTableBody');
+          tableBody.innerHTML = "";
+          if (!data || data.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="6" class="text-center">情報がありません</td></tr>`;
+            return;
+          }
+          data.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>${item.job_code}</td>
+              <td>${item.job}</td>
+              <td>${item.total_work_min}</td>
+              <td>${item.total_night_shift_min}</td>
+              <td>未計算</td>
+            `;
+            tableBody.appendChild(tr);
+          });
+        })
+        .catch(error => {
+          const tableBody = document.getElementById('jobSummaryTableBody');
+          tableBody.innerHTML = `<tr><td colspan="6" class="text-center">情報がありません</td></tr>`;
+          console.error(error);
+        });
+    }
 
-    
+    // 月次メモ保存関数（blurイベント時に呼ばれる）
+    function saveMonthlyMemo(input) {
+      const memo = input.value;
+      const empId = input.getAttribute('data-emp-id');
+      const month = input.getAttribute('data-month');
+      // POST リクエストでメモを保存する
+      fetch('/api/saveMonthlyMemo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employee_id: parseInt(empId), month: month, memo: memo })
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('月次メモの保存に失敗しました');
+        }
+        return response.text();
+      })
+      .then(data => {
+        console.log(data);
+      })
+      .catch(error => {
+        alert(error.message);
+      });
+    }
+
     // ページ読み込み時にデフォルトで現在年月を設定してレポートを取得
     window.addEventListener('load', function() {
-      // 現在年月 (YYYY-MM) を取得してセット
       const now = new Date();
       const year = now.getFullYear();
       const month = ("0" + (now.getMonth() + 1)).slice(-2);
-      document.getElementById("monthSelect").value = `${year}-${month}`;
+      const selectedMonth = `${year}-${month}`;
+      document.getElementById("monthSelect").value = selectedMonth;
       fetchMonthlySummary();
       fetchJobSummary();
     });
   </script>
-  
   
   <!-- Bootstrap 5 JS Bundle -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

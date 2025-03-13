@@ -44,6 +44,7 @@ type Employee struct {
 	PaidVacationCount      int                   `json:"paid_vacation_count,omitempty"`
 	EmploymentType         string                `json:"employment_type"`
 	HourlyWage             int                   `json:"hourly_wage"`
+	TransportationExpense  int                   `json:"transportation_expense"` // 追加
 	PaidVacationHistory    []PaidVacationHistory `json:"paid_vacation_history,omitempty"`
 	PaidVacationGrantLabel string                `json:"paid_vacation_grant_label,omitempty"`
 	ValidPaidVacationCount int                   `json:"valid_paid_vacation_count,omitempty"`
@@ -73,6 +74,27 @@ func initDB() {
 		log.Fatal("Database ping error:", err)
 	}
 	fmt.Println("Database connected successfully!")
+}
+
+// initializeSecretAnswer は、system_config の secret_answer_hash が空の場合、デフォルト値をハッシュ化して保存します。
+func initializeSecretAnswer() {
+	var secretAnswerHash string
+	err := db.QueryRow("SELECT secret_answer_hash FROM system_config WHERE id = 1").Scan(&secretAnswerHash)
+	if err != nil {
+		log.Fatal("Failed to query secret_answer_hash:", err)
+	}
+	if secretAnswerHash == "" {
+		defaultSecret := "Pちゃん" // デフォルトの秘密の合言葉
+		hashed, err := bcrypt.GenerateFromPassword([]byte(defaultSecret), bcrypt.DefaultCost)
+		if err != nil {
+			log.Fatal("Failed to hash default secret answer:", err)
+		}
+		_, err = db.Exec("UPDATE system_config SET secret_answer_hash = ? WHERE id = 1", string(hashed))
+		if err != nil {
+			log.Fatal("Failed to update secret_answer_hash:", err)
+		}
+		fmt.Println("Initialized secret_answer_hash with default value")
+	}
 }
 
 // 従業員情報を取得するAPI
@@ -130,8 +152,9 @@ func addEmployeeHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println("Database error:", err)
 		return
 	}
-	query := "INSERT INTO employees (name, job, job_code, max_attendance_count, paid_vacation_limit, paid_vacation_grant_date, employment_type, hourly_wage) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-	result, err := db.Exec(query, emp.Name, emp.Job, jobCode, emp.MaxAttendanceCount, emp.PaidVacationLimit, emp.PaidVacationGrantDate, emp.EmploymentType, emp.HourlyWage)
+	// 交通費も追加したため、SQLのカラムと引数を増やす
+	query := "INSERT INTO employees (name, job, job_code, max_attendance_count, paid_vacation_limit, paid_vacation_grant_date, employment_type, hourly_wage, transportation_expense) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+	result, err := db.Exec(query, emp.Name, emp.Job, jobCode, emp.MaxAttendanceCount, emp.PaidVacationLimit, emp.PaidVacationGrantDate, emp.EmploymentType, emp.HourlyWage, emp.TransportationExpense)
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		log.Println("Insert Error:", err)
@@ -161,6 +184,7 @@ func addEmployeeHandler(w http.ResponseWriter, r *http.Request) {
 		PaidVacationGrantDate: emp.PaidVacationGrantDate,
 		EmploymentType:        emp.EmploymentType,
 		HourlyWage:            emp.HourlyWage,
+		TransportationExpense: emp.TransportationExpense,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(newEmployee)
@@ -413,11 +437,11 @@ func employeeDetailHandler(w http.ResponseWriter, r *http.Request) {
 	// 従業員詳細の取得
 	var emp Employee
 	err := db.QueryRow(`
-        SELECT id, employee_number, name, job, job_code, max_attendance_count, 
-               paid_vacation_limit, paid_vacation_grant_date, employment_type, hourly_wage
-        FROM employees WHERE employee_number = ?`, empNumber).
+    SELECT id, employee_number, name, job, job_code, max_attendance_count, 
+           paid_vacation_limit, paid_vacation_grant_date, employment_type, hourly_wage, transportation_expense
+    FROM employees WHERE employee_number = ?`, empNumber).
 		Scan(&emp.ID, &emp.EmployeeNumber, &emp.Name, &emp.Job, &emp.JobCode, &emp.MaxAttendanceCount,
-			&emp.PaidVacationLimit, &emp.PaidVacationGrantDate, &emp.EmploymentType, &emp.HourlyWage)
+			&emp.PaidVacationLimit, &emp.PaidVacationGrantDate, &emp.EmploymentType, &emp.HourlyWage, &emp.TransportationExpense)
 	if err != nil {
 		http.Error(w, "Employee not found", http.StatusNotFound)
 		return
@@ -773,8 +797,9 @@ type UpdateEmployeePayload struct {
 	MaxAttendanceCount    int    `json:"max_attendance_count"`
 	PaidVacationLimit     int    `json:"paid_vacation_limit"`
 	PaidVacationGrantDate string `json:"paid_vacation_grant_date"`
-	EmploymentType        string `json:"employment_type"` // 追加
-	HourlyWage            int    `json:"hourly_wage"`     // 追加
+	EmploymentType        string `json:"employment_type"`        // 追加
+	HourlyWage            int    `json:"hourly_wage"`            // 追加
+	TransportationExpense int    `json:"transportation_expense"` // 追加
 }
 
 func updateEmployeeHandler(w http.ResponseWriter, r *http.Request) {
@@ -800,14 +825,15 @@ func updateEmployeeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// 更新後の従業員番号を生成（職種コード＋ID）
 	employeeNumber := fmt.Sprintf("%s%06d", jobCode, payload.ID)
+	// 交通費も更新するため、SQL文を変更
 	query := `
         UPDATE employees
         SET name = ?, job = ?, job_code = ?, max_attendance_count = ?, 
-            paid_vacation_limit = ?, paid_vacation_grant_date = ?, employment_type = ?, hourly_wage = ?, employee_number = ?
+            paid_vacation_limit = ?, paid_vacation_grant_date = ?, employment_type = ?, hourly_wage = ?, transportation_expense = ?, employee_number = ?
         WHERE id = ?
     `
 	_, err = db.Exec(query, payload.Name, payload.Job, jobCode, payload.MaxAttendanceCount,
-		payload.PaidVacationLimit, payload.PaidVacationGrantDate, payload.EmploymentType, payload.HourlyWage, employeeNumber, payload.ID)
+		payload.PaidVacationLimit, payload.PaidVacationGrantDate, payload.EmploymentType, payload.HourlyWage, payload.TransportationExpense, employeeNumber, payload.ID)
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		log.Println("Update Error in /api/updateEmployee:", err)
@@ -816,10 +842,10 @@ func updateEmployeeHandler(w http.ResponseWriter, r *http.Request) {
 	var updated Employee
 	err = db.QueryRow(`
         SELECT id, employee_number, name, job, job_code, max_attendance_count, 
-               paid_vacation_limit, paid_vacation_grant_date, employment_type, hourly_wage
+               paid_vacation_limit, paid_vacation_grant_date, employment_type, hourly_wage, transportation_expense
         FROM employees WHERE id = ?`, payload.ID).
 		Scan(&updated.ID, &updated.EmployeeNumber, &updated.Name, &updated.Job,
-			&updated.JobCode, &updated.MaxAttendanceCount, &updated.PaidVacationLimit, &updated.PaidVacationGrantDate, &updated.EmploymentType, &updated.HourlyWage)
+			&updated.JobCode, &updated.MaxAttendanceCount, &updated.PaidVacationLimit, &updated.PaidVacationGrantDate, &updated.EmploymentType, &updated.HourlyWage, &updated.TransportationExpense)
 	if err != nil {
 		http.Error(w, "Failed to fetch updated employee", http.StatusInternalServerError)
 		return
@@ -828,16 +854,22 @@ func updateEmployeeHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(updated)
 }
 
+// MonthlySummary 構造体（有給取得日数フィールドを追加）
+// MonthlySummary 構造体（従業員IDフィールド追加）
 type MonthlySummary struct {
-	EmpNumber                string `json:"emp_number"`
-	EmpName                  string `json:"emp_name"`
-	TotalWorkMin             int    `json:"total_work_min"`
-	TotalNightShiftMin       int    `json:"total_night_shift_min"`
-	AttendanceDays           int    `json:"attendance_days"`
-	RemainingAttendanceCount int    `json:"remaining_attendance_count"`
-	HolidayWorkMin           int    `json:"holiday_work_min"`
-	PaidVacationTaken        int    `json:"paid_vacation_taken"`
-	RemainingPaidVacation    int    `json:"remaining_paid_vacation"`
+	EmpID                 int    `json:"emp_id"`
+	EmpNumber             string `json:"emp_number"`
+	EmpName               string `json:"emp_name"`
+	HourlyWage            int    `json:"hourly_wage"`
+	TransportationExpense int    `json:"transportation_expense"`
+	TotalWorkMin          int    `json:"total_work_min"`
+	TotalNightShiftMin    int    `json:"total_night_shift_min"`
+	AttendanceDays        int    `json:"attendance_days"`
+	HolidayWorkMin        int    `json:"holiday_work_min"` // 固定値例
+	PaidVacationTaken     int    `json:"paid_vacation_taken"`
+	RemainingPaidVacation int    `json:"remaining_paid_vacation"` // 固定値例
+	MonthlySalary         int    `json:"monthly_salary"`
+	Memo                  string `json:"memo"`
 }
 
 type JobSummary struct {
@@ -861,82 +893,119 @@ type ReportData struct {
 // 対象の年月（year, month）ごとに、各従業員の勤務日ごとに
 // 勤務時間（diff）と、夜勤時間（nightDiff）を算出し、全体を集計する関数
 func getMonthlySummary(year, month int) ([]MonthlySummary, error) {
+	// 選択された年月を "YYYY-MM" 形式に変換
+	monthStr := fmt.Sprintf("%04d-%02d", year, month)
+
 	query := `
-	SELECT e.employee_number, e.name,
-	       SUM(work_diff) AS total_work_min,
-	       SUM(night_diff) AS total_night_shift_min,
-	       COUNT(*) AS attendance_days
-	FROM employees e
-	JOIN (
-	  SELECT employee_id, target_date,
-	         TIMESTAMPDIFF(MINUTE,
-	           CONCAT(target_date, ' ', MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)),
-	           CONCAT(target_date, ' ', MAX(CASE WHEN target_type = 'clock_out' THEN target_time END))
-	         ) AS work_diff,
-	         CASE
-	           WHEN MAX(CASE WHEN target_type = 'clock_out' THEN target_time END) < MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)
-	           THEN
-	             GREATEST(0, TIMESTAMPDIFF(MINUTE,
-	               CONCAT(target_date, ' ', '22:00:00'),
-	               CONCAT(target_date, ' ', '24:00:00')
-	             ) - 
-	             CASE WHEN MIN(CASE WHEN target_type = 'clock_in' THEN target_time END) > '22:00:00'
-	                  THEN TIMESTAMPDIFF(MINUTE,
-	                    CONCAT(target_date, ' ', MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)),
-	                    CONCAT(target_date, ' ', '24:00:00')
-	                  )
-	                  ELSE 0
-	             END)
-	             +
-	             GREATEST(0, TIMESTAMPDIFF(MINUTE,
-	               CONCAT(DATE_ADD(target_date, INTERVAL 1 DAY), ' ', '00:00:00'),
-	               CONCAT(DATE_ADD(target_date, INTERVAL 1 DAY), ' ', LEAST(MAX(CASE WHEN target_type = 'clock_out' THEN target_time END), '05:00:00'))
-	             ))
-	           ELSE
-	             (
-	               CASE
-	                 WHEN MAX(CASE WHEN target_type = 'clock_out' THEN target_time END) > '22:00:00'
-	                   THEN TIMESTAMPDIFF(MINUTE,
-	                          CONCAT(target_date, ' ', '22:00:00'),
-	                          CONCAT(target_date, ' ', LEAST(MAX(CASE WHEN target_type = 'clock_out' THEN target_time END), '24:00:00'))
-	                        )
-	                 ELSE 0
-	               END
-	             )
-	             +
-	             (
-	               CASE
-	                 WHEN MIN(CASE WHEN target_type = 'clock_in' THEN target_time END) < '05:00:00'
-	                   THEN 
-	                     CASE
-	                       WHEN MAX(CASE WHEN target_type = 'clock_out' THEN target_time END) <= '05:00:00'
-	                         THEN TIMESTAMPDIFF(MINUTE,
-	                               CONCAT(target_date, ' ', MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)),
-	                               CONCAT(target_date, ' ', MAX(CASE WHEN target_type = 'clock_out' THEN target_time END))
-	                              )
-	                       WHEN MAX(CASE WHEN target_type = 'clock_out' THEN target_time END) > '05:00:00'
-	                         THEN TIMESTAMPDIFF(MINUTE,
-	                               CONCAT(target_date, ' ', MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)),
-	                               CONCAT(target_date, ' ', '05:00:00')
-	                              )
-	                       ELSE 0
-	                     END
-	                 ELSE 0
-	               END
-	             )
-	         END AS night_diff
-	  FROM work_records
-	  WHERE target_type IN ('clock_in','clock_out')
-	    AND MONTH(target_date) = ?
-	    AND YEAR(target_date) = ?
-	  GROUP BY employee_id, target_date
-	) t ON e.id = t.employee_id
-	GROUP BY e.employee_number, e.name
+    SELECT 
+        e.employee_number, 
+        e.name, 
+        e.id, 
+        e.hourly_wage, 
+        e.transportation_expense,
+        COALESCE(SUM(wrd.work_diff), 0) AS total_work_min,
+        COALESCE(SUM(wrd.night_diff), 0) AS total_night_shift_min,
+        COALESCE(SUM(wrd.extra_min), 0) AS total_extra_min,
+        COUNT(DISTINCT wrd.target_date) AS attendance_days,
+        (
+            SELECT COUNT(*)
+            FROM work_records pv
+            WHERE pv.employee_id = e.id
+              AND pv.target_type = 'paid_vacation'
+              AND MONTH(pv.target_date) = ?
+              AND YEAR(pv.target_date) = ?
+        ) AS paid_vacation_taken,
+        IFNULL(MAX(m.memo), '') AS memo
+    FROM employees e
+    LEFT JOIN monthly_memos m 
+        ON e.id = m.employee_id AND m.month = ?
+    LEFT JOIN (
+        SELECT 
+            employee_id, 
+            target_date,
+            TIMESTAMPDIFF(MINUTE,
+                CONCAT(target_date, ' ', MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)),
+                CONCAT(target_date, ' ', MAX(CASE WHEN target_type = 'clock_out' THEN target_time END))
+            ) AS work_diff,
+            CASE
+                WHEN MAX(CASE WHEN target_type = 'clock_out' THEN target_time END) < MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)
+                THEN
+                    GREATEST(0, TIMESTAMPDIFF(MINUTE,
+                        CONCAT(target_date, ' ', '22:00:00'),
+                        CONCAT(target_date, ' ', '24:00:00')
+                    ) - 
+                    CASE WHEN MIN(CASE WHEN target_type = 'clock_in' THEN target_time END) > '22:00:00'
+                         THEN TIMESTAMPDIFF(MINUTE,
+                             CONCAT(target_date, ' ', MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)),
+                             CONCAT(target_date, ' ', '24:00:00')
+                         )
+                         ELSE 0
+                    END)
+                    +
+                    GREATEST(0, TIMESTAMPDIFF(MINUTE,
+                        CONCAT(DATE_ADD(target_date, INTERVAL 1 DAY), ' ', '00:00:00'),
+                        CONCAT(DATE_ADD(target_date, INTERVAL 1 DAY), ' ', LEAST(MAX(CASE WHEN target_type = 'clock_out' THEN target_time END), '05:00:00'))
+                    ))
+                ELSE
+                    (
+                        CASE
+                            WHEN MAX(CASE WHEN target_type = 'clock_out' THEN target_time END) > '22:00:00'
+                                THEN TIMESTAMPDIFF(MINUTE,
+                                     CONCAT(target_date, ' ', '22:00:00'),
+                                     CONCAT(target_date, ' ', LEAST(MAX(CASE WHEN target_type = 'clock_out' THEN target_time END), '24:00:00'))
+                                 )
+                            ELSE 0
+                        END
+                    )
+                    +
+                    (
+                        CASE
+                            WHEN MIN(CASE WHEN target_type = 'clock_in' THEN target_time END) < '05:00:00'
+                                THEN 
+                                    CASE
+                                        WHEN MAX(CASE WHEN target_type = 'clock_out' THEN target_time END) <= '05:00:00'
+                                            THEN TIMESTAMPDIFF(MINUTE,
+                                                 CONCAT(target_date, ' ', MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)),
+                                                 CONCAT(target_date, ' ', MAX(CASE WHEN target_type = 'clock_out' THEN target_time END))
+                                             )
+                                        WHEN MAX(CASE WHEN target_type = 'clock_out' THEN target_time END) > '05:00:00'
+                                            THEN TIMESTAMPDIFF(MINUTE,
+                                                 CONCAT(target_date, ' ', MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)),
+                                                 CONCAT(target_date, ' ', '05:00:00')
+                                             )
+                                        ELSE 0
+                                    END
+                            ELSE 0
+                        END
+                    )
+            END AS night_diff,
+            CASE 
+                WHEN TIMESTAMPDIFF(MINUTE,
+                        CONCAT(target_date, ' ', MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)),
+                        CONCAT(target_date, ' ', MAX(CASE WHEN target_type = 'clock_out' THEN target_time END))
+                     ) > 480 
+                THEN TIMESTAMPDIFF(MINUTE,
+                        CONCAT(target_date, ' ', MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)),
+                        CONCAT(target_date, ' ', MAX(CASE WHEN target_type = 'clock_out' THEN target_time END))
+                     ) - 480
+                ELSE 0
+            END AS extra_min
+        FROM work_records
+        WHERE target_type IN ('clock_in','clock_out')
+          AND MONTH(target_date) = ?
+          AND YEAR(target_date) = ?
+        GROUP BY employee_id, target_date
+    ) wrd ON e.id = wrd.employee_id
+    GROUP BY e.id, e.employee_number, e.name, e.hourly_wage, e.transportation_expense
 	`
 
-	// ※サブクエリ内で ? は2個しか使っていないので、パラメータは month, year の2個のみ渡す
-	rows, err := db.Query(query, month, year)
+	// パラメータの順番:
+	// 1. paid_vacation_taken用: month, year
+	// 2. monthly_memos結合用: monthStr ("YYYY-MM"形式)
+	// 3. work_recordsサブクエリ用: month, year
+	rows, err := db.Query(query, month, year, monthStr, month, year)
 	if err != nil {
+		log.Printf("Query error in getMonthlySummary: %v", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -944,14 +1013,54 @@ func getMonthlySummary(year, month int) ([]MonthlySummary, error) {
 	var summaries []MonthlySummary
 	for rows.Next() {
 		var s MonthlySummary
-		if err := rows.Scan(&s.EmpNumber, &s.EmpName, &s.TotalWorkMin, &s.TotalNightShiftMin, &s.AttendanceDays); err != nil {
+		var empID int
+		var totalExtraMin int
+		if err := rows.Scan(&s.EmpNumber, &s.EmpName, &empID, &s.HourlyWage, &s.TransportationExpense, &s.TotalWorkMin, &s.TotalNightShiftMin, &totalExtraMin, &s.AttendanceDays, &s.PaidVacationTaken, &s.Memo); err != nil {
+			log.Printf("Scan error in getMonthlySummary: %v", err)
 			return nil, err
 		}
+		s.EmpID = empID
 		s.HolidayWorkMin = 0
-		s.PaidVacationTaken = 0
-		s.RemainingPaidVacation = 10
+
+		// 残り有給休暇数の取得
+		var validPaidVacation int
+		err := db.QueryRow(`
+            SELECT COALESCE(SUM(granted_days), 0)
+            FROM paid_vacation_history
+            WHERE employee_id = ?
+            AND grant_date >= DATE_SUB(CURDATE(), INTERVAL 2 YEAR)
+        `, empID).Scan(&validPaidVacation)
+		if err != nil {
+			log.Printf("Error getting valid paid vacation: %v", err)
+			s.RemainingPaidVacation = 0
+		} else {
+			var totalUsed int
+			err := db.QueryRow(`
+                    SELECT COUNT(*)
+                    FROM work_records
+                    WHERE employee_id = ?
+                    AND target_type = 'paid_vacation'
+                `, empID).Scan(&totalUsed)
+			if err != nil {
+				log.Printf("Error getting total used vacation: %v", err)
+				s.RemainingPaidVacation = validPaidVacation
+			} else {
+				s.RemainingPaidVacation = validPaidVacation - totalUsed
+				if s.RemainingPaidVacation < 0 {
+					s.RemainingPaidVacation = 0
+				}
+			}
+		}
+
+		// 月給計算（分単位→時間換算）
+		workHours := float64(s.TotalWorkMin) / 60.0
+		extraHours := float64(s.TotalNightShiftMin+totalExtraMin) / 60.0
+		monthlySalary := float64(s.HourlyWage)*workHours + float64(s.HourlyWage)*extraHours*0.25
+		s.MonthlySalary = int(monthlySalary + 0.5)
+
 		summaries = append(summaries, s)
 	}
+
 	return summaries, nil
 }
 
@@ -991,12 +1100,6 @@ func getMonthlySummaryByJob() ([]JobSummary, error) {
 
 // monthlySummaryHandler は、クエリパラメータ "month" が指定されている場合、その年月のデータを抽出します
 func monthlySummaryHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// クエリパラメータ "month" を YYYY-MM 形式で取得
 	monthStr := r.URL.Query().Get("month")
 	var year, month int
 	if monthStr != "" {
@@ -1017,7 +1120,6 @@ func monthlySummaryHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		// 指定がない場合は現在の年月を利用
 		now := time.Now()
 		year = now.Year()
 		month = int(now.Month())
@@ -1302,23 +1404,29 @@ func secretResetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 正解は "Pちゃん"
-	if req.SecretAnswer != "Pちゃん" {
+	// データベースからハッシュ化された秘密の合言葉を取得する
+	var storedSecretHash string
+	err := db.QueryRow("SELECT secret_answer_hash FROM system_config WHERE id = 1").Scan(&storedSecretHash)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Println("Query Error in secretResetHandler:", err)
+		return
+	}
+
+	// ユーザー入力の秘密の合言葉と保存済みのハッシュを比較する
+	if err := bcrypt.CompareHashAndPassword([]byte(storedSecretHash), []byte(req.SecretAnswer)); err != nil {
 		http.Error(w, "秘密の合言葉が間違っています", http.StatusUnauthorized)
 		return
 	}
 
-	// bcryptで新しいパスワードをハッシュ化
+	// 新しいパスワードをハッシュ化して更新
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
 		http.Error(w, "Error processing password", http.StatusInternalServerError)
 		log.Println("bcrypt error in secretResetHandler:", err)
 		return
 	}
-
-	// email は既存のものをそのまま使うか、必要に応じて更新してください
-	query := "UPDATE system_config SET owner_password = ? WHERE id = 1"
-	_, err = db.Exec(query, string(hashedPassword))
+	_, err = db.Exec("UPDATE system_config SET owner_password = ? WHERE id = 1", string(hashedPassword))
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		log.Println("Update Error in /api/secretReset:", err)
@@ -1328,8 +1436,37 @@ func secretResetHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("パスワードが再設定されました"))
 }
 
+func saveMonthlyMemoHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		EmployeeID int    `json:"employee_id"`
+		Month      string `json:"month"`
+		Memo       string `json:"memo"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+	// 例：INSERT ... ON DUPLICATE KEY UPDATE で保存
+	query := `INSERT INTO monthly_memos (employee_id, month, memo)
+              VALUES (?, ?, ?)
+              ON DUPLICATE KEY UPDATE memo = VALUES(memo)`
+	_, err := db.Exec(query, req.EmployeeID, req.Month, req.Memo)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Println("Error saving monthly memo:", err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain")
+	w.Write([]byte("月次メモを保存しました"))
+}
+
 func main() {
 	initDB()
+	initializeSecretAnswer()
 
 	// APIハンドラーを先に登録する
 	http.HandleFunc("/api/employees", employeesHandler)
@@ -1353,6 +1490,7 @@ func main() {
 	http.HandleFunc("/api/jobSummary", jobSummaryHandler)
 	http.HandleFunc("/api/updatePaidVacationHistory", updatePaidVacationHistoryHandler)
 	http.HandleFunc("/api/secretReset", secretResetHandler)
+	http.HandleFunc("/api/saveMonthlyMemo", saveMonthlyMemoHandler)
 
 	// その後、静的ファイルサーバーを登録する
 	http.Handle("/", http.FileServer(http.Dir("./static")))

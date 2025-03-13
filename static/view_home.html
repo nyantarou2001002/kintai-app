@@ -251,10 +251,16 @@
             </div>
           </div>
         </div>
-        <!-- 追加：パートの場合のみ表示する時給入力 -->
-        <div class="mb-3" id="hourlyWageDiv" style="display: none;">
-          <label for="hourly_wage" class="form-label">時給 (円):</label>
-          <input type="number" class="form-control" id="hourly_wage" min="0">
+        <!-- 追加：パートの場合のみ表示する時給と交通費入力 -->
+        <div class="mb-3" id="parttimeFields" style="display: none;">
+          <div class="mb-3">
+            <label for="hourly_wage" class="form-label">時給 (円):</label>
+            <input type="number" class="form-control" id="hourly_wage" min="0">
+          </div>
+          <div class="mb-3">
+            <label for="transportation_expense" class="form-label">交通費 (円):</label>
+            <input type="number" class="form-control" id="transportation_expense" min="0">
+          </div>
         </div>
         <div class="mb-3">
           <label for="paid_vacation_limit" class="form-label">有給休暇上限:</label>
@@ -269,21 +275,19 @@
       <div id="employee_add_message" class="mt-2"></div>
     </div>
 
-    <!-- 追加：雇用形態に応じて時給入力欄の表示制御 -->
     <script>
-      // 雇用形態のラジオボタンの変更時に、パートの場合は時給入力欄を表示する
+      // 雇用形態の変更時に、パートの場合のみ「時給」と「交通費」入力欄を表示
       document.querySelectorAll('input[name="employment_type"]').forEach(radio => {
         radio.addEventListener('change', function() {
-          const hourlyWageDiv = document.getElementById('hourlyWageDiv');
+          const parttimeFields = document.getElementById('parttimeFields');
           if (this.value === 'パート') {
-            hourlyWageDiv.style.display = 'block';
+            parttimeFields.style.display = 'block';
           } else {
-            hourlyWageDiv.style.display = 'none';
+            parttimeFields.style.display = 'none';
           }
         });
       });
 
-      // 変更後の handleAddEmployee 関数（抜粋）
       function handleAddEmployee(event) {
         event.preventDefault();
         const record = {
@@ -299,10 +303,12 @@
             return joiningDate.toISOString().split("T")[0];
           })(),
           employment_type: document.querySelector('input[name="employment_type"]:checked').value,
-          hourly_wage: 0
+          hourly_wage: 0,
+          transportation_expense: 0
         };
         if (record.employment_type === "パート") {
           record.hourly_wage = parseInt(document.getElementById("hourly_wage").value, 10) || 0;
+          record.transportation_expense = parseInt(document.getElementById("transportation_expense").value, 10) || 0;
         }
         fetch('/api/addEmployee', {
           method: 'POST',
@@ -316,8 +322,8 @@
           })
           .catch(error => console.error('エラー:', error));
       }
-
     </script>
+
 
 
     <div class="mb-4">
