@@ -919,7 +919,6 @@ type ReportData struct {
 // 対象の年月（year, month）ごとに、各従業員の勤務日ごとに
 // 勤務時間（diff）と、夜勤時間（nightDiff）を算出し、全体を集計する関数
 func getMonthlySummary(year, month int) ([]MonthlySummary, error) {
-	// 選択された年月を "YYYY-MM" 形式に変換
 	monthStr := fmt.Sprintf("%04d-%02d", year, month)
 
 	query := `
@@ -933,6 +932,7 @@ func getMonthlySummary(year, month int) ([]MonthlySummary, error) {
         COALESCE(SUM(wrd.work_diff), 0) AS total_work_min,
         COALESCE(SUM(wrd.night_diff), 0) AS total_night_shift_min,
         COALESCE(SUM(wrd.extra_min), 0) AS total_extra_min,
+        COALESCE(SUM(wrd.break_duration), 0) AS total_break_min,
         COUNT(DISTINCT wrd.target_date) AS attendance_days,
         (
             SELECT COUNT(*)
@@ -1016,20 +1016,17 @@ func getMonthlySummary(year, month int) ([]MonthlySummary, error) {
                         CONCAT(target_date, ' ', MAX(CASE WHEN target_type = 'clock_out' THEN target_time END))
                      ) - 480
                 ELSE 0
-            END AS extra_min
+            END AS extra_min,
+            COALESCE(SUM(CASE WHEN target_type = 'break_duration' THEN break_duration ELSE 0 END), 0) AS break_duration
         FROM work_records
-        WHERE target_type IN ('clock_in','clock_out')
+        WHERE target_type IN ('clock_in','clock_out', 'break_duration')
           AND MONTH(target_date) = ?
           AND YEAR(target_date) = ?
         GROUP BY employee_id, target_date
     ) wrd ON e.id = wrd.employee_id
-    GROUP BY e.id, e.employee_number, e.name, e.employment_type, e.hourly_wage, e.transportation_expense
-	`
+    GROUP BY e.id, e.employee_number, e.name, e.employment_type, e.hourly_wage, e.transportation_expense, m.memo
+    `
 
-	// パラメータの順番:
-	// 1. paid_vacation_taken用: month, year
-	// 2. monthly_memos結合用: monthStr ("YYYY-MM"形式)
-	// 3. work_recordsサブクエリ用: month, year
 	rows, err := db.Query(query, month, year, monthStr, month, year)
 	if err != nil {
 		log.Printf("Query error in getMonthlySummary: %v", err)
@@ -1042,12 +1039,23 @@ func getMonthlySummary(year, month int) ([]MonthlySummary, error) {
 		var s MonthlySummary
 		var empID int
 		var totalExtraMin int
-		if err := rows.Scan(&s.EmpNumber, &s.EmpName, &empID, &s.EmploymentType, &s.HourlyWage, &s.TransportationExpense, &s.TotalWorkMin, &s.TotalNightShiftMin, &totalExtraMin, &s.AttendanceDays, &s.PaidVacationTaken, &s.Memo); err != nil {
+		var totalBreakMin int
+		var memo sql.NullString
+
+		if err := rows.Scan(&s.EmpNumber, &s.EmpName, &empID, &s.EmploymentType, &s.HourlyWage, &s.TransportationExpense, &s.TotalWorkMin, &s.TotalNightShiftMin, &totalExtraMin, &totalBreakMin, &s.AttendanceDays, &s.PaidVacationTaken, &memo); err != nil {
 			log.Printf("Scan error in getMonthlySummary: %v", err)
 			return nil, err
 		}
+
 		s.EmpID = empID
 		s.HolidayWorkMin = 0
+		s.TotalWorkMin -= totalBreakMin // 休憩時間を引く
+
+		if memo.Valid {
+			s.Memo = memo.String
+		} else {
+			s.Memo = ""
+		}
 
 		// 残り有給休暇数の取得
 		var validPaidVacation int
@@ -1063,11 +1071,11 @@ func getMonthlySummary(year, month int) ([]MonthlySummary, error) {
 		} else {
 			var totalUsed int
 			err := db.QueryRow(`
-                    SELECT COUNT(*)
-                    FROM work_records
-                    WHERE employee_id = ?
-                    AND target_type = 'paid_vacation'
-                `, empID).Scan(&totalUsed)
+                SELECT COUNT(*)
+                FROM work_records
+                WHERE employee_id = ?
+                AND target_type = 'paid_vacation'
+            `, empID).Scan(&totalUsed)
 			if err != nil {
 				log.Printf("Error getting total used vacation: %v", err)
 				s.RemainingPaidVacation = validPaidVacation
@@ -1079,11 +1087,20 @@ func getMonthlySummary(year, month int) ([]MonthlySummary, error) {
 			}
 		}
 
-		// 月給計算（分単位→時間換算）
+		// 月給計算
 		workHours := float64(s.TotalWorkMin) / 60.0
-		extraHours := float64(s.TotalNightShiftMin+totalExtraMin) / 60.0
-		monthlySalary := float64(s.HourlyWage)*workHours + float64(s.HourlyWage)*extraHours*0.25
-		s.MonthlySalary = int(monthlySalary + 0.5)
+		extraHours := float64(totalExtraMin) / 60.0
+		nightHours := float64(s.TotalNightShiftMin) / 60.0
+		monthlySalary := float64(s.HourlyWage) * (workHours + (extraHours+nightHours)*0.25)
+
+		// 交通費を加算
+		monthlySalary += float64(s.TransportationExpense * s.AttendanceDays)
+
+		s.MonthlySalary = int(monthlySalary)
+
+		// 月給計算のデバッグログ
+		log.Printf("EmpNumber: %s, EmpName: %s, HourlyWage: %d, TotalWorkMin: %d, TotalNightShiftMin: %d, AttendanceDays: %d, TransportationExpense: %d, MonthlySalary: %d",
+			s.EmpNumber, s.EmpName, s.HourlyWage, s.TotalWorkMin, s.TotalNightShiftMin, s.AttendanceDays, s.TransportationExpense, s.MonthlySalary)
 
 		summaries = append(summaries, s)
 	}
@@ -1631,7 +1648,6 @@ func exportExcelHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// getYearMonthFromStr のエラーハンドリングを追加
 	year, month, err := getYearMonthFromStr(monthStr)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -1673,7 +1689,6 @@ func exportExcelHandler(w http.ResponseWriter, r *http.Request) {
 		f.SetCellValue(sheetName, fmt.Sprintf("I%d", rowIndex), ms.PaidVacationTaken)
 		f.SetCellValue(sheetName, fmt.Sprintf("K%d", rowIndex), ms.Memo)
 
-		// パートの場合のみ詳細情報を入力
 		if ms.EmploymentType == "パート" {
 			f.SetCellValue(sheetName, fmt.Sprintf("C%d", rowIndex), ms.HourlyWage)
 			f.SetCellValue(sheetName, fmt.Sprintf("D%d", rowIndex), ms.TotalWorkMin)
@@ -1709,17 +1724,35 @@ func exportExcelHandler(w http.ResponseWriter, r *http.Request) {
 		f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('D'+baseCol)), rowIndex), "合計時間（分）")
 		rowIndex++
 
-		dailyRecords := make(map[int]int)
+		dailyRecords := make(map[string][]WorkRecord)
 		for _, rec := range records {
-			day, _ := strconv.Atoi(strings.Split(rec.TargetDate, "-")[2])
-			workMinutes := calculateWorkMinutes(rec.TargetTime, "")
-			dailyRecords[day] += workMinutes
+			dailyRecords[rec.TargetDate] = append(dailyRecords[rec.TargetDate], rec)
 		}
 
 		totalMinutes := 0
+		totalHours := 0
+		totalRemainingMinutes := 0
 		for day := 1; day <= daysInMonth; day++ {
-			workMinutes := dailyRecords[day]
+			dateStr := fmt.Sprintf("%04d-%02d-%02d", year, month, day)
+			workMinutes := 0
+			if recs, exists := dailyRecords[dateStr]; exists {
+				clockIn := ""
+				clockOut := ""
+				breakDuration := 0
+				for _, rec := range recs {
+					if rec.TargetType == "clock_in" {
+						clockIn = rec.TargetTime
+					} else if rec.TargetType == "clock_out" {
+						clockOut = rec.TargetTime
+					} else if rec.TargetType == "break_duration" && rec.BreakDuration != nil {
+						breakDuration += *rec.BreakDuration
+					}
+				}
+				workMinutes = calculateWorkMinutes(clockIn, clockOut) - breakDuration
+			}
 			totalMinutes += workMinutes
+			totalHours += workMinutes / 60
+			totalRemainingMinutes += workMinutes % 60
 			f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('A'+baseCol)), rowIndex), fmt.Sprintf("%d月%d日", month, day))
 			f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('B'+baseCol)), rowIndex), workMinutes/60)
 			f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('C'+baseCol)), rowIndex), workMinutes%60)
@@ -1727,7 +1760,12 @@ func exportExcelHandler(w http.ResponseWriter, r *http.Request) {
 			rowIndex++
 		}
 
+		// 合計行を追加
+		totalHours += totalRemainingMinutes / 60
+		totalRemainingMinutes = totalRemainingMinutes % 60
 		f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('A'+baseCol)), rowIndex), "合計")
+		f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('B'+baseCol)), rowIndex), totalHours)
+		f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('C'+baseCol)), rowIndex), totalRemainingMinutes)
 		f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('D'+baseCol)), rowIndex), totalMinutes)
 		colOffset++
 		rowIndex -= daysInMonth + 3

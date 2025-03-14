@@ -186,8 +186,14 @@
   <!-- JavaScript -->
   <script>
     // 月次勤怠レポートを取得してテーブルに表示
+    // 月次勤怠レポートデータを取得しテーブルに表示する
+    // 月次勤怠レポートデータを取得しテーブルに表示する
+    // 月次勤怠レポートデータを取得しテーブルに表示する
+  // 月次勤怠レポートデータを取得しテーブルに表示する
+    // 月次勤怠レポートデータを取得しテーブルに表示する
     function fetchMonthlySummary() {
       const month = document.getElementById("monthSelect").value;
+      localStorage.setItem("selectedMonth", month); // 選択した年月を保存
       fetch('/api/monthlySummary?month=' + month)
         .then(response => {
           if (!response.ok) {
@@ -196,6 +202,7 @@
           return response.json();
         })
         .then(data => {
+          console.log(data); // デバッグ用にデータをコンソールに出力
           const tableBody = document.getElementById('monthlySummaryTableBody');
           tableBody.innerHTML = "";
           if (!data || data.length === 0) {
@@ -220,21 +227,21 @@
               const nightMins = item.total_night_shift_min % 60;
               item.nightTimeFormatted = `${nightHours}時間${nightMins}分 (${item.total_night_shift_min}分)`;
             }
-            const transportationRoundTrip = item.transportation_expense || 0;
-            const transportationCost = transportationRoundTrip * (item.attendance_days || 0);
+            const transportationRoundTrip = item.transportation_expense !== null ? item.transportation_expense : 0;
+            const transportationCost = transportationRoundTrip * (item.attendance_days !== null ? item.attendance_days : 0);
             const memoInput = `<input type="text" class="monthly-memo" data-emp-id="${item.emp_id}" data-month="${month}" value="${item.memo || ''}" placeholder="メモを入力" onblur="saveMonthlyMemo(this)" />`;
             const tr = document.createElement('tr');
             tr.innerHTML = `
               <td>${item.emp_number || '-'}</td>
               <td>${item.emp_name || '-'}</td>
-              <td>${item.hourly_wage || ''}${item.hourly_wage !== "" ? "円" : ""}</td>
+              <td>${item.hourly_wage !== null ? item.hourly_wage + "円" : ''}</td>
               <td>${item.workTimeFormatted || ''}</td>
               <td>${item.nightTimeFormatted || ''}</td>
-              <td>${item.attendance_days || ''}${item.attendance_days !== "" ? "日" : ""}</td>
-              <td>${transportationRoundTrip || ''}${transportationRoundTrip !== "" ? "円" : ""}</td>
-              <td>${transportationCost || ''}${transportationCost !== "" ? "円" : ""}</td>
+              <td>${item.attendance_days !== null ? item.attendance_days + "日" : ''}</td>
+              <td>${transportationRoundTrip}円</td>
+              <td>${transportationCost}円</td>
               <td>${item.paid_vacation_taken || 0}日</td>
-              <td>${item.monthly_salary || ''}${item.monthly_salary !== "" ? "円" : ""}</td>
+              <td>${item.monthly_salary !== null ? item.monthly_salary + "円" : ''}</td>
               <td>${memoInput}</td>
             `;
             tableBody.appendChild(tr);
@@ -317,6 +324,8 @@
     document.getElementById('partEmployeeSelect').addEventListener('change', renderPartCalendar);
 
     // 選択された従業員と年月に基づき、カレンダーを表示する
+    // 選択された従業員と年月に基づき、カレンダーを表示する
+    // 選択された従業員と年月に基づき、カレンダーを表示する
     function renderPartCalendar() {
       const monthInput = document.getElementById('calendarMonth').value;
       const empNumber = document.getElementById('partEmployeeSelect').value;
@@ -354,23 +363,25 @@
           // 日ごとの打刻情報（出勤・退勤のみ）を集計
           const dailyRecords = {};
           records.forEach(rec => {
-            if (rec.target_type === "clock_in" || rec.target_type === "clock_out") {
-              if (!dailyRecords[rec.target_date]) {
-                dailyRecords[rec.target_date] = { clockIn: null, clockOut: null };
+            if (!dailyRecords[rec.target_date]) {
+              dailyRecords[rec.target_date] = { clockIn: null, clockOut: null, breakDuration: 0 };
+            }
+            if (rec.target_type === "clock_in") {
+              // 複数ある場合は最も早い出勤時刻を採用
+              if (!dailyRecords[rec.target_date].clockIn || rec.target_time < dailyRecords[rec.target_date].clockIn) {
+                dailyRecords[rec.target_date].clockIn = rec.target_time;
               }
-              if (rec.target_type === "clock_in") {
-                // 複数ある場合は最も早い出勤時刻を採用
-                if (!dailyRecords[rec.target_date].clockIn || rec.target_time < dailyRecords[rec.target_date].clockIn) {
-                  dailyRecords[rec.target_date].clockIn = rec.target_time;
-                }
-              } else if (rec.target_type === "clock_out") {
-                // 複数ある場合は最も遅い退勤時刻を採用
-                if (!dailyRecords[rec.target_date].clockOut || rec.target_time > dailyRecords[rec.target_date].clockOut) {
-                  dailyRecords[rec.target_date].clockOut = rec.target_time;
-                }
+            } else if (rec.target_type === "clock_out") {
+              // 複数ある場合は最も遅い退勤時刻を採用
+              if (!dailyRecords[rec.target_date].clockOut || rec.target_time > dailyRecords[rec.target_date].clockOut) {
+                dailyRecords[rec.target_date].clockOut = rec.target_time;
               }
+            } else if (rec.target_type === "break_duration" && rec.break_duration) {
+              dailyRecords[rec.target_date].breakDuration += rec.break_duration;
             }
           });
+
+          let totalWorkMinutes = 0;
 
           // 指定された月の各日について行を作成
           for (let d = 1; d <= daysInMonth; d++) {
@@ -387,12 +398,14 @@
               const [outH, outM] = dailyRecords[fullDateStr].clockOut.split(':').map(Number);
               const inTotal = inH * 60 + inM;
               const outTotal = outH * 60 + outM;
-              workMinutes = outTotal - inTotal;
+              workMinutes = outTotal - inTotal - dailyRecords[fullDateStr].breakDuration;
               if (workMinutes < 0) workMinutes = 0;
               workHours = Math.floor(workMinutes / 60);
               remainingMinutes = workMinutes % 60;
             }
-            
+
+            totalWorkMinutes += workMinutes;
+
             const tr = document.createElement('tr');
             tr.innerHTML = `<td>${dateStr}</td>
                             <td>${workHours}</td>
@@ -400,6 +413,16 @@
                             <td>${workMinutes}</td>`;
             tbody.appendChild(tr);
           }
+
+          // 合計行を追加
+          const totalHours = Math.floor(totalWorkMinutes / 60);
+          const totalMinutes = totalWorkMinutes % 60;
+          const totalTr = document.createElement('tr');
+          totalTr.innerHTML = `<td><strong>合計</strong></td>
+                              <td><strong>${totalHours}</strong></td>
+                              <td><strong>${totalMinutes}</strong></td>
+                              <td><strong>${totalWorkMinutes}</strong></td>`;
+          tbody.appendChild(totalTr);
 
           table.appendChild(tbody);
           container.appendChild(table);
@@ -465,16 +488,35 @@
     }
 
     // 初回読み込み時の設定
+    // 初回読み込み時の設定
     window.addEventListener('load', function() {
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = ("0" + (now.getMonth() + 1)).slice(-2);
-      const selectedMonth = `${year}-${month}`;
+      let selectedMonth = localStorage.getItem("selectedMonth"); // ローカルストレージから取得
+      if (!selectedMonth) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = ("0" + (now.getMonth() + 1)).slice(-2);
+        selectedMonth = `${year}-${month}`;
+      }
       document.getElementById("monthSelect").value = selectedMonth;
       fetchMonthlySummary();
       fetchJobSummary();
       document.getElementById("calendarMonth").value = selectedMonth;
       loadPartEmployees();
+
+      // タブの状態を保存する
+      document.querySelectorAll('.nav-link').forEach(tab => {
+        tab.addEventListener('shown.bs.tab', function (event) {
+          const activeTab = event.target.getAttribute('href');
+          localStorage.setItem('activeTab', activeTab);
+        });
+      });
+
+      // タブの状態を復元する
+      const activeTab = localStorage.getItem('activeTab');
+      if (activeTab) {
+        const tab = new bootstrap.Tab(document.querySelector(`a[href="${activeTab}"]`));
+        tab.show();
+      }
     });
   </script>
   <!-- Bootstrap 5 JS Bundle -->
