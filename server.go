@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xuri/excelize/v2"
 	"golang.org/x/crypto/bcrypt"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -104,11 +105,12 @@ func employeesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := db.Query(`
-        SELECT e.employee_number, e.name, e.job, e.job_code, e.max_attendance_count, 
-               e.paid_vacation_limit, e.paid_vacation_grant_date 
-        FROM employees e
-        JOIN job_types j ON e.job_code = j.code
-    `)
+    SELECT e.employee_number, e.name, e.job, e.job_code, e.max_attendance_count, 
+           e.paid_vacation_limit, e.paid_vacation_grant_date, e.employment_type
+    FROM employees e
+    JOIN job_types j ON e.job_code = j.code
+	`)
+
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		log.Println("Query Error:", err)
@@ -118,7 +120,8 @@ func employeesHandler(w http.ResponseWriter, r *http.Request) {
 	var employees []Employee
 	for rows.Next() {
 		var emp Employee
-		if err := rows.Scan(&emp.EmployeeNumber, &emp.Name, &emp.Job, &emp.JobCode, &emp.MaxAttendanceCount, &emp.PaidVacationLimit, &emp.PaidVacationGrantDate); err != nil {
+		if err := rows.Scan(&emp.EmployeeNumber, &emp.Name, &emp.Job, &emp.JobCode,
+			&emp.MaxAttendanceCount, &emp.PaidVacationLimit, &emp.PaidVacationGrantDate, &emp.EmploymentType); err != nil {
 			http.Error(w, "Database error", http.StatusInternalServerError)
 			log.Println("Scan Error:", err)
 			return
@@ -534,41 +537,65 @@ func employeeDetailHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // タイムレコーダー履歴取得API
+// タイムレコーダー履歴取得API
 func timeRecordsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
 	empNumber := r.URL.Query().Get("empNumber")
 	if empNumber == "" {
 		http.Error(w, "Missing employee number", http.StatusBadRequest)
 		return
 	}
+
 	var empID int
 	err := db.QueryRow("SELECT id FROM employees WHERE employee_number = ?", empNumber).Scan(&empID)
 	if err != nil {
 		http.Error(w, "Employee not found", http.StatusNotFound)
 		return
 	}
+
 	month := r.URL.Query().Get("month")
 	var rows *sql.Rows
+
 	if month != "" {
 		rows, err = db.Query(
-			"SELECT employee_id, target_date, target_time, target_type, memo, break_duration FROM work_records WHERE employee_id = ? AND target_date LIKE ? ORDER BY target_date ASC, target_time ASC",
-			empID, month+"%",
+			`SELECT employee_id, 
+			        DATE_FORMAT(target_date, '%Y-%m-%d') as target_date, 
+			        DATE_FORMAT(target_time, '%H:%i:%s') as target_time, 
+			        target_type, 
+			        memo, 
+			        break_duration 
+			 FROM work_records 
+			 WHERE employee_id = ? 
+			   AND DATE_FORMAT(target_date, '%Y-%m') = ? 
+			 ORDER BY target_date ASC, target_time ASC`,
+			empID, month,
 		)
 	} else {
 		rows, err = db.Query(
-			"SELECT employee_id, target_date, target_time, target_type, memo, break_duration FROM work_records WHERE employee_id = ? ORDER BY target_date ASC, target_time ASC",
+			`SELECT employee_id, 
+			        DATE_FORMAT(target_date, '%Y-%m-%d') as target_date, 
+			        DATE_FORMAT(target_time, '%H:%i:%s') as target_time, 
+			        target_type, 
+			        memo, 
+			        break_duration 
+			 FROM work_records 
+			 WHERE employee_id = ? 
+			 ORDER BY target_date ASC, target_time ASC`,
 			empID,
 		)
 	}
+
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		log.Println("Query Error in timeRecordsHandler:", err)
 		return
 	}
 	defer rows.Close()
+
 	var records []WorkRecord
 	for rows.Next() {
 		var rec WorkRecord
@@ -579,6 +606,7 @@ func timeRecordsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		records = append(records, rec)
 	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(records)
 }
@@ -1516,6 +1544,216 @@ func saveMonthlyMemoHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("月次メモを保存しました"))
 }
 
+// getTimeRecords は、指定された従業員番号と年月の打刻記録を取得する関数
+func getTimeRecords(empNumber string, monthStr string) ([]WorkRecord, error) {
+	var empID int
+	err := db.QueryRow("SELECT id FROM employees WHERE employee_number = ?", empNumber).Scan(&empID)
+	if err != nil {
+		return nil, fmt.Errorf("employee not found: %v", err)
+	}
+
+	rows, err := db.Query(
+		`SELECT employee_id, 
+		        DATE_FORMAT(target_date, '%Y-%m-%d') as target_date, 
+		        DATE_FORMAT(target_time, '%H:%i:%s') as target_time, 
+		        target_type, 
+		        memo, 
+		        break_duration 
+		 FROM work_records 
+		 WHERE employee_id = ? 
+		   AND DATE_FORMAT(target_date, '%Y-%m') = ? 
+		 ORDER BY target_date ASC, target_time ASC`,
+		empID, monthStr,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("database error: %v", err)
+	}
+	defer rows.Close()
+
+	var records []WorkRecord
+	for rows.Next() {
+		var rec WorkRecord
+		if err := rows.Scan(&rec.EmployeeID, &rec.TargetDate, &rec.TargetTime, &rec.TargetType, &rec.Memo, &rec.BreakDuration); err != nil {
+			return nil, fmt.Errorf("scan error: %v", err)
+		}
+		records = append(records, rec)
+	}
+
+	return records, nil
+}
+
+// 指定の年月からその月の日数を取得する関数
+func getDaysInMonth(year int, month int) int {
+	// うるう年対応
+	if month == 2 {
+		if (year%4 == 0 && year%100 != 0) || (year%400 == 0) {
+			return 29
+		}
+		return 28
+	}
+	// 30日の月
+	if month == 4 || month == 6 || month == 9 || month == 11 {
+		return 30
+	}
+	return 31 // 31日の月
+}
+
+// getYearMonthFromStr は "YYYY-MM" の文字列から年と月を取得する関数
+func getYearMonthFromStr(monthStr string) (int, int, error) {
+	parts := strings.Split(monthStr, "-")
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("invalid month format: %s", monthStr)
+	}
+
+	year, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid year format: %s", parts[0])
+	}
+
+	month, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid month format: %s", parts[1])
+	}
+
+	// 月の範囲チェック
+	if month < 1 || month > 12 {
+		return 0, 0, fmt.Errorf("invalid month value: %d", month)
+	}
+
+	return year, month, nil
+}
+
+// "YYYY-MM" の文字列から年と月を取得する関数
+func exportExcelHandler(w http.ResponseWriter, r *http.Request) {
+	monthStr := r.URL.Query().Get("month")
+	if monthStr == "" {
+		http.Error(w, "Missing month parameter", http.StatusBadRequest)
+		return
+	}
+
+	// getYearMonthFromStr のエラーハンドリングを追加
+	year, month, err := getYearMonthFromStr(monthStr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	monthlySummaries, err := getMonthlySummary(year, month)
+	if err != nil {
+		http.Error(w, "Failed to fetch monthly summary", http.StatusInternalServerError)
+		return
+	}
+
+	partEmployeeCalendars := make(map[string][]WorkRecord)
+	for _, emp := range monthlySummaries {
+		if emp.EmploymentType == "パート" {
+			records, err := getTimeRecords(emp.EmpNumber, monthStr)
+			if err != nil {
+				http.Error(w, "Failed to fetch employee calendar", http.StatusInternalServerError)
+				return
+			}
+			partEmployeeCalendars[emp.EmpNumber] = records
+		}
+	}
+
+	f := excelize.NewFile()
+	sheetName := "勤怠レポート"
+	f.NewSheet(sheetName)
+
+	headers := []string{"従業員番号", "従業員名", "時給", "合計勤務時間(分)", "合計夜勤時間(分)", "出勤日数", "交通費往復", "交通費", "有給取得日数", "月給", "メモ"}
+	for i, h := range headers {
+		cell := string(rune('A'+i)) + "1"
+		f.SetCellValue(sheetName, cell, h)
+	}
+
+	rowIndex := 2
+	for _, ms := range monthlySummaries {
+		f.SetCellValue(sheetName, fmt.Sprintf("A%d", rowIndex), ms.EmpNumber)
+		f.SetCellValue(sheetName, fmt.Sprintf("B%d", rowIndex), ms.EmpName)
+		f.SetCellValue(sheetName, fmt.Sprintf("I%d", rowIndex), ms.PaidVacationTaken)
+		f.SetCellValue(sheetName, fmt.Sprintf("K%d", rowIndex), ms.Memo)
+
+		// パートの場合のみ詳細情報を入力
+		if ms.EmploymentType == "パート" {
+			f.SetCellValue(sheetName, fmt.Sprintf("C%d", rowIndex), ms.HourlyWage)
+			f.SetCellValue(sheetName, fmt.Sprintf("D%d", rowIndex), ms.TotalWorkMin)
+			f.SetCellValue(sheetName, fmt.Sprintf("E%d", rowIndex), ms.TotalNightShiftMin)
+			f.SetCellValue(sheetName, fmt.Sprintf("F%d", rowIndex), ms.AttendanceDays)
+			f.SetCellValue(sheetName, fmt.Sprintf("G%d", rowIndex), ms.TransportationExpense)
+			f.SetCellValue(sheetName, fmt.Sprintf("H%d", rowIndex), ms.TransportationExpense*ms.AttendanceDays)
+			f.SetCellValue(sheetName, fmt.Sprintf("J%d", rowIndex), ms.MonthlySalary)
+		}
+		rowIndex++
+	}
+
+	rowIndex += 2
+	daysInMonth := getDaysInMonth(year, month)
+
+	colOffset := 0
+	for empNum, records := range partEmployeeCalendars {
+		var empName string
+		for _, ms := range monthlySummaries {
+			if ms.EmpNumber == empNum {
+				empName = ms.EmpName
+				break
+			}
+		}
+
+		baseCol := colOffset*5 + 1
+		f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('A'+baseCol)), rowIndex), empName)
+		rowIndex++
+
+		f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('A'+baseCol)), rowIndex), "日付")
+		f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('B'+baseCol)), rowIndex), "時間")
+		f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('C'+baseCol)), rowIndex), "分")
+		f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('D'+baseCol)), rowIndex), "合計時間（分）")
+		rowIndex++
+
+		dailyRecords := make(map[int]int)
+		for _, rec := range records {
+			day, _ := strconv.Atoi(strings.Split(rec.TargetDate, "-")[2])
+			workMinutes := calculateWorkMinutes(rec.TargetTime, "")
+			dailyRecords[day] += workMinutes
+		}
+
+		totalMinutes := 0
+		for day := 1; day <= daysInMonth; day++ {
+			workMinutes := dailyRecords[day]
+			totalMinutes += workMinutes
+			f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('A'+baseCol)), rowIndex), fmt.Sprintf("%d月%d日", month, day))
+			f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('B'+baseCol)), rowIndex), workMinutes/60)
+			f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('C'+baseCol)), rowIndex), workMinutes%60)
+			f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('D'+baseCol)), rowIndex), workMinutes)
+			rowIndex++
+		}
+
+		f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('A'+baseCol)), rowIndex), "合計")
+		f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('D'+baseCol)), rowIndex), totalMinutes)
+		colOffset++
+		rowIndex -= daysInMonth + 3
+	}
+
+	f.DeleteSheet("Sheet1")
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=勤怠レポート_%s.xlsx", monthStr))
+	w.WriteHeader(http.StatusOK)
+	f.Write(w)
+}
+
+// 労働時間計算
+func calculateWorkMinutes(clockIn, clockOut string) int {
+	if clockIn == "" || clockOut == "" {
+		return 0
+	}
+	inParts := strings.Split(clockIn, ":")
+	outParts := strings.Split(clockOut, ":")
+	inH, _ := strconv.Atoi(inParts[0])
+	inM, _ := strconv.Atoi(inParts[1])
+	outH, _ := strconv.Atoi(outParts[0])
+	outM, _ := strconv.Atoi(outParts[1])
+	return (outH*60 + outM) - (inH*60 + inM)
+}
+
 func main() {
 	initDB()
 	initializeSecretAnswer()
@@ -1543,6 +1781,7 @@ func main() {
 	http.HandleFunc("/api/updatePaidVacationHistory", updatePaidVacationHistoryHandler)
 	http.HandleFunc("/api/secretReset", secretResetHandler)
 	http.HandleFunc("/api/saveMonthlyMemo", saveMonthlyMemoHandler)
+	http.HandleFunc("/api/exportExcel", exportExcelHandler)
 
 	// その後、静的ファイルサーバーを登録する
 	http.Handle("/", http.FileServer(http.Dir("./static")))
