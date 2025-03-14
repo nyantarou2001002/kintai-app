@@ -96,6 +96,123 @@
           </tbody>
         </table>
       </div>
+      <!-- 打刻不整合一覧セクションを追加 -->
+      <div class="mb-4">
+        <h3>打刻不整合一覧</h3>
+        <table class="table table-striped">
+          <thead class="table-dark">
+            <tr>
+              <th>従業員番号</th>
+              <th>従業員名</th>
+              <th>日付</th>
+              <th>不整合内容</th>
+            </tr>
+          </thead>
+          <tbody id="inconsistenciesTableBody">
+            <!-- 不整合データが動的に追加される -->
+          </tbody>
+        </table>
+      </div>
+      <!-- 新しい従業員を追加 -->
+      <div class="mb-4">
+        <h3>新しい従業員を追加</h3>
+        <form id="addEmployeeForm" onsubmit="handleAddEmployee(event)">
+          <div class="mb-3">
+            <label for="employee_name" class="form-label">従業員名:</label>
+            <input type="text" class="form-control" id="employee_name" required>
+          </div>
+          <div class="mb-3">
+            <label for="employee_job" class="form-label">職種:</label>
+            <select class="form-select" id="employee_job" required>
+              <option value="">-- 職種を選択してください --</option>
+            </select>
+          </div>
+          <!-- 追加：雇用形態 -->
+          <div class="mb-3">
+            <label class="form-label">雇用形態:</label>
+            <div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="employment_type" id="fulltime" value="正社員" checked>
+                <label class="form-check-label" for="fulltime">正社員</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="employment_type" id="parttime" value="パート">
+                <label class="form-check-label" for="parttime">パート</label>
+              </div>
+            </div>
+          </div>
+          <!-- 追加：パートの場合のみ表示する時給と交通費入力 -->
+          <div class="mb-3" id="parttimeFields" style="display: none;">
+            <div class="mb-3">
+              <label for="hourly_wage" class="form-label">時給 (円):</label>
+              <input type="number" class="form-control" id="hourly_wage" min="0">
+            </div>
+            <div class="mb-3">
+              <label for="transportation_expense" class="form-label">交通費 (円):</label>
+              <input type="number" class="form-control" id="transportation_expense" min="0">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label for="paid_vacation_limit" class="form-label">有給休暇上限:</label>
+            <input type="number" class="form-control" id="paid_vacation_limit" required>
+          </div>
+          <div class="mb-3">
+            <label for="paid_vacation_grant_date" class="form-label">入社日:</label>
+            <input type="date" class="form-control" id="paid_vacation_grant_date" required>
+          </div>
+          <button type="submit" class="btn btn-success">追加</button>
+        </form>
+        <div id="employee_add_message" class="mt-2"></div>
+      </div>
+      
+      <div class="mb-4">
+        <h3>新しい職種を追加</h3>
+        <form id="addJobTypeForm" onsubmit="handleAddJobType(event)">
+          <div class="mb-3">
+            <label for="job_type_code" class="form-label">職種コード (2文字大文字):</label>
+            <input type="text" class="form-control" id="job_type_code" required maxlength="2" pattern="[A-Z]{2}">
+          </div>
+          <div class="mb-3">
+            <label for="job_type_name" class="form-label">職種名:</label>
+            <input type="text" class="form-control" id="job_type_name" required>
+          </div>
+          <button type="submit" class="btn btn-success">職種を追加</button>
+        </form>
+        <div id="jobtype_add_message" class="mt-2"></div>
+      </div>
+  
+      <div class="mb-4">
+        <h3>職種一覧</h3>
+        <table class="table table-striped">
+          <thead class="table-dark">
+            <tr>
+              <th>職種コード</th>
+              <th>職種名</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="jobTypeTableBody">
+            <!-- ここに職種リストが動的に追加される -->
+          </tbody>
+        </table>
+      </div>
+      <div class="mb-4">
+        <h3>パスワードの再設定</h3>
+        <!-- 現在のメールアドレスを保持（非表示） -->
+        <input type="hidden" id="owner_email_hidden" />
+        <form id="ownerForm" onsubmit="return handleSetOwner(event)">
+          <div class="mb-3">
+            <label for="new_password" class="form-label">新しいパスワード:</label>
+            <input type="password" class="form-control" id="new_password" required />
+          </div>
+          <div class="mb-3">
+            <label for="confirm_password" class="form-label">新しいパスワード（確認）:</label>
+            <input type="password" class="form-control" id="confirm_password" required />
+          </div>
+          <button type="submit" class="btn btn-primary">設定</button>
+        </form>
+        <div id="owner_message" class="mt-2"></div>
+      </div>
     </div>
   
     <script>
@@ -154,23 +271,7 @@
       fetchEmployees();
     </script>
 
-    <!-- 打刻不整合一覧セクションを追加 -->
-    <div class="mb-4">
-      <h3>打刻不整合一覧</h3>
-      <table class="table table-striped">
-        <thead class="table-dark">
-          <tr>
-            <th>従業員番号</th>
-            <th>従業員名</th>
-            <th>日付</th>
-            <th>不整合内容</th>
-          </tr>
-        </thead>
-        <tbody id="inconsistenciesTableBody">
-          <!-- 不整合データが動的に追加される -->
-        </tbody>
-      </table>
-    </div>
+    
 
     <script>
       // 不整合一覧の取得
@@ -223,57 +324,7 @@
     </script>
 
 
-    <!-- 新しい従業員を追加 -->
-    <div class="mb-4">
-      <h3>新しい従業員を追加</h3>
-      <form id="addEmployeeForm" onsubmit="handleAddEmployee(event)">
-        <div class="mb-3">
-          <label for="employee_name" class="form-label">従業員名:</label>
-          <input type="text" class="form-control" id="employee_name" required>
-        </div>
-        <div class="mb-3">
-          <label for="employee_job" class="form-label">職種:</label>
-          <select class="form-select" id="employee_job" required>
-            <option value="">-- 職種を選択してください --</option>
-          </select>
-        </div>
-        <!-- 追加：雇用形態 -->
-        <div class="mb-3">
-          <label class="form-label">雇用形態:</label>
-          <div>
-            <div class="form-check form-check-inline">
-              <input class="form-check-input" type="radio" name="employment_type" id="fulltime" value="正社員" checked>
-              <label class="form-check-label" for="fulltime">正社員</label>
-            </div>
-            <div class="form-check form-check-inline">
-              <input class="form-check-input" type="radio" name="employment_type" id="parttime" value="パート">
-              <label class="form-check-label" for="parttime">パート</label>
-            </div>
-          </div>
-        </div>
-        <!-- 追加：パートの場合のみ表示する時給と交通費入力 -->
-        <div class="mb-3" id="parttimeFields" style="display: none;">
-          <div class="mb-3">
-            <label for="hourly_wage" class="form-label">時給 (円):</label>
-            <input type="number" class="form-control" id="hourly_wage" min="0">
-          </div>
-          <div class="mb-3">
-            <label for="transportation_expense" class="form-label">交通費 (円):</label>
-            <input type="number" class="form-control" id="transportation_expense" min="0">
-          </div>
-        </div>
-        <div class="mb-3">
-          <label for="paid_vacation_limit" class="form-label">有給休暇上限:</label>
-          <input type="number" class="form-control" id="paid_vacation_limit" required>
-        </div>
-        <div class="mb-3">
-          <label for="paid_vacation_grant_date" class="form-label">入社日:</label>
-          <input type="date" class="form-control" id="paid_vacation_grant_date" required>
-        </div>
-        <button type="submit" class="btn btn-success">追加</button>
-      </form>
-      <div id="employee_add_message" class="mt-2"></div>
-    </div>
+    
 
     <script>
       // 雇用形態の変更時に、パートの場合のみ「時給」と「交通費」入力欄を表示
@@ -326,37 +377,7 @@
 
 
 
-    <div class="mb-4">
-      <h3>新しい職種を追加</h3>
-      <form id="addJobTypeForm" onsubmit="handleAddJobType(event)">
-        <div class="mb-3">
-          <label for="job_type_code" class="form-label">職種コード (2文字大文字):</label>
-          <input type="text" class="form-control" id="job_type_code" required maxlength="2" pattern="[A-Z]{2}">
-        </div>
-        <div class="mb-3">
-          <label for="job_type_name" class="form-label">職種名:</label>
-          <input type="text" class="form-control" id="job_type_name" required>
-        </div>
-        <button type="submit" class="btn btn-success">職種を追加</button>
-      </form>
-      <div id="jobtype_add_message" class="mt-2"></div>
-    </div>
-
-    <div class="mb-4">
-      <h3>職種一覧</h3>
-      <table class="table table-striped">
-        <thead class="table-dark">
-          <tr>
-            <th>職種コード</th>
-            <th>職種名</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody id="jobTypeTableBody">
-          <!-- ここに職種リストが動的に追加される -->
-        </tbody>
-      </table>
-    </div>
+    
 
     <script>
       // 職種一覧を取得し、プルダウンに追加
@@ -439,24 +460,6 @@
       // ページ読み込み時に職種一覧を取得
       fetchJobTypes();
     </script>
-
-    <div class="mb-4">
-      <h3>パスワードの再設定</h3>
-      <!-- 現在のメールアドレスを保持（非表示） -->
-      <input type="hidden" id="owner_email_hidden" />
-      <form id="ownerForm" onsubmit="return handleSetOwner(event)">
-        <div class="mb-3">
-          <label for="new_password" class="form-label">新しいパスワード:</label>
-          <input type="password" class="form-control" id="new_password" required />
-        </div>
-        <div class="mb-3">
-          <label for="confirm_password" class="form-label">新しいパスワード（確認）:</label>
-          <input type="password" class="form-control" id="confirm_password" required />
-        </div>
-        <button type="submit" class="btn btn-primary">設定</button>
-      </form>
-      <div id="owner_message" class="mt-2"></div>
-    </div>
 
 
     <script>

@@ -3,136 +3,185 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>勤怠管理画面</title>
+  <title>勤怠管理システム</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    /* freeeのブルー */
+    :root {
+      --freee-blue: #00A3E0;
+      --freee-light-blue: #E6F7FE;
+      --freee-gray: #F4F4F4;
+    }
+
+    body {
+        background-color: #f0f8ff;
+        color: #1e64aa;
+      }
+
+    .container-custom {
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      padding: 30px;
+    }
+
+    .header-title {
+        color: #1e64aa;
+      }
+
+    .btn-primary {
+      background-color: var(--freee-blue);
+      border: none;
+    }
+
+    .btn-primary:hover {
+      background-color: #008BCB;
+    }
+
+    .form-select, .form-control {
+      border: 2px solid var(--freee-blue);
+    }
+
+    h1 {
+      color: var(--freee-blue);
+      font-weight: bold;
+    }
+
+    .btn-custom {
+      width: 100px;
+    }
+  </style>
 </head>
 <body>
-  <div class="container my-4">
-    <h1 class="text-center">勤怠管理システム</h1>
-    <p class="text-center">従業員を選択し、打刻を行ってください。</p>
-    <a class="btn btn-primary btn-lg" href="login.html">管理者画面に移動</a>
+  <div class="container mt-5">
+    <div class="container-custom bg-light p-4 rounded shadow">
+      <h1 class="text-center header-title">勤怠管理システム</h1>
+      <p class="text-center text-muted">従業員を選択し、打刻を行ってください。</p>
+      
+      <div class="text-center mb-4">
+        <a class="btn btn-primary btn-lg" href="login.html">管理者画面へ</a>
+      </div>
 
-    <div class="mb-4">
-      <label for="employeeSelect">従業員を選択:</label>
-      <select id="employeeSelect" class="form-select">
-        <option value="">-- 従業員を選択してください --</option>
-      </select>
+      <div class="mb-4">
+        <label for="employeeSelect" class="form-label">従業員を選択:</label>
+        <select id="employeeSelect" class="form-select">
+          <option value="">-- 従業員を選択してください --</option>
+        </select>
+      </div>
+
+      <div class="text-center mb-4">
+        <button class="btn btn-success btn-custom" onclick="recordImmediate('clock_in')">出勤</button>
+        <button class="btn btn-warning btn-custom" onclick="recordImmediate('clock_out')">退勤</button>
+      </div>
+
+      <div class="mb-4 ">
+        <h2 class="text-center header-title">有給休暇登録</h3>
+        <form onsubmit="return handlePaidVacationSubmit(this)" class="text-center">
+          <div class="d-flex justify-content-center">
+            <input type="date" name="target_date" class="form-control w-50 me-2" required>
+            <button type="submit" class="btn btn-primary">登録</button>
+          </div>
+        </form>
+      </div>
     </div>
+  </div>
 
-    <div class="mb-4 text-center">
-      <button class="btn btn-success" onclick="recordImmediate('clock_in')">出勤</button>
-      <button class="btn btn-warning" onclick="recordImmediate('clock_out')">退勤</button>
-    </div>
-
-    <div class="mb-4">
-      <h3>有給休暇登録</h3>
-      <form onsubmit="return handlePaidVacationSubmit(this)">
-        <label for="target_date">対象日:</label>
-        <input type="date" name="target_date" required>
-        <button type="submit" class="btn btn-primary">登録する</button>
-      </form>
-    </div>
-
-    <script>
-      function fetchEmployees() {
-        fetch('/api/employees')
-          .then(response => {
-            if (!response.ok) {
-              throw new Error('サーバーエラー: ' + response.status);
-            }
-            return response.json();
-          })
-          .then(data => {
-            const select = document.getElementById("employeeSelect");
-            select.innerHTML = '<option value="">-- 従業員を選択してください --</option>';
-            data.forEach(emp => {
-              const option = document.createElement("option");
-              option.value = emp.id;
-              option.text = `${emp.name} (${emp.job})`;
-              select.add(option);
-            });
-          })
-          .catch(error => console.error('従業員取得エラー:', error));
-      }
-
-      fetchEmployees();
-
-      function getJapanDateString() {
-        const now = new Date();
-        now.setMinutes(now.getMinutes() - now.getTimezoneOffset()); // UTCからJSTへ変換
-
-        const year = now.getFullYear();
-        const month = (now.getMonth() + 1).toString().padStart(2, "0"); // 2桁にする
-        const day = now.getDate().toString().padStart(2, "0"); // 2桁にする
-
-        return `${year}-${month}-${day}`; // YYYY-MM-DD 形式
-      }
-
-
-      function recordImmediate(type) {
-        const empSelect = document.getElementById("employeeSelect");
-        if (empSelect.value === "") {
-          alert("従業員を選択してください");
-          return;
-        }
-
-        const now = new Date();
-        const target_date = getJapanDateString(); // YYYY-MM-DD 形式
-        const target_time = now.toTimeString().slice(0, 5); // HH:MM 形式
-
-        const record = {
-          employee_id: parseInt(empSelect.value, 10),
-          target_date: target_date,
-          target_time: target_time, // HH:MM 形式に修正
-          target_type: type
-        };
-
-        fetch('/api/saveWorkRecord', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(record)
-        })
+  <script>
+    function fetchEmployees() {
+      fetch('/api/employees')
         .then(response => {
           if (!response.ok) {
             throw new Error('サーバーエラー: ' + response.status);
           }
-          return response.text();
+          return response.json();
         })
-        .then(data => alert(data))
-        .catch(error => console.error('エラー:', error));
+        .then(data => {
+          const select = document.getElementById("employeeSelect");
+          select.innerHTML = '<option value="">-- 従業員を選択してください --</option>';
+          data.forEach(emp => {
+            const option = document.createElement("option");
+            option.value = emp.id;
+            option.text = `${emp.name} (${emp.job})`;
+            select.add(option);
+          });
+        })
+        .catch(error => console.error('従業員取得エラー:', error));
+    }
+
+    fetchEmployees();
+
+    function getJapanDateString() {
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset()); // UTCからJSTへ変換
+      const year = now.getFullYear();
+      const month = (now.getMonth() + 1).toString().padStart(2, "0"); // 2桁にする
+      const day = now.getDate().toString().padStart(2, "0"); // 2桁にする
+      return `${year}-${month}-${day}`; // YYYY-MM-DD 形式
+    }
+
+    function recordImmediate(type) {
+      const empSelect = document.getElementById("employeeSelect");
+      if (empSelect.value === "") {
+        alert("従業員を選択してください");
+        return;
       }
 
-      function handlePaidVacationSubmit(formObject) {
-        const empSelect = document.getElementById("employeeSelect");
-        if (empSelect.value === "") {
-          alert("従業員を選択してください");
-          return false;
+      const now = new Date();
+      const target_date = getJapanDateString(); // YYYY-MM-DD 形式
+      const target_time = now.toTimeString().slice(0, 5); // HH:MM 形式
+
+      const record = {
+        employee_id: parseInt(empSelect.value, 10),
+        target_date: target_date,
+        target_time: target_time,
+        target_type: type
+      };
+
+      fetch('/api/saveWorkRecord', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(record)
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('サーバーエラー: ' + response.status);
         }
+        return response.text();
+      })
+      .then(data => alert(data))
+      .catch(error => console.error('エラー:', error));
+    }
 
-        const record = {
-          employee_id: parseInt(empSelect.value, 10),
-          target_date: formObject.target_date.value,
-          target_time: "00:00", // 有給の場合は固定
-          target_type: "paid_vacation"
-        };
-
-        fetch('/api/saveWorkRecord', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(record)
-        })
-        .then(response => {
-          if (!response.ok) {
-            throw new Error('サーバーエラー: ' + response.status);
-          }
-          return response.text();
-        })
-        .then(data => alert(data))
-        .catch(error => console.error('エラー:', error));
-
+    function handlePaidVacationSubmit(formObject) {
+      const empSelect = document.getElementById("employeeSelect");
+      if (empSelect.value === "") {
+        alert("従業員を選択してください");
         return false;
       }
-    </script>
-  </div>
+
+      const record = {
+        employee_id: parseInt(empSelect.value, 10),
+        target_date: formObject.target_date.value,
+        target_time: "00:00",
+        target_type: "paid_vacation"
+      };
+
+      fetch('/api/saveWorkRecord', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(record)
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('サーバーエラー: ' + response.status);
+        }
+        return response.text();
+      })
+      .then(data => alert(data))
+      .catch(error => console.error('エラー:', error));
+
+      return false;
+    }
+  </script>
 </body>
 </html>
