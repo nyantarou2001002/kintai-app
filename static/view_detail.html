@@ -170,20 +170,18 @@
     <div id="newTimeRecord" class="mt-4">
       <h3 class="section-title">新規タイムレコーダー記録</h3>
       <form id="newTimeRecordForm" onsubmit="handleNewTimeRecord(event)">
-        <div class="row mb-3">
-          <div class="col-md-6">
-            <label for="record_date" class="form-label">対象日:</label>
-            <input type="date" id="record_date" class="form-control" required>
-          </div>
-          <div class="col-md-6">
-            <label for="record_time" class="form-label">対象時刻:</label>
-            <input type="time" id="record_time" class="form-control" required>
-          </div>
+        <div class="mb-3">
+          <label for="record_date" class="form-label">対象日:</label>
+          <input type="date" id="record_date" class="form-control w-50" required>
+        </div>
+        <div class="mb-3">
+          <label for="record_time" class="form-label">対象時刻:</label>
+          <input type="time" id="record_time" class="form-control w-50" required>
         </div>
         <!-- 休憩時間入力欄 -->
         <div class="mb-3" id="breakDurationContainer">
           <label for="break_duration" class="form-label">休憩時間（分）:</label>
-          <input type="number" id="break_duration" class="form-control" min="0" placeholder="例: 30">
+          <input type="number" id="break_duration" class="form-control w-50" min="0" placeholder="例: 30">
         </div>
         <div class="mb-3">
           <label class="form-label">種別:</label>
@@ -197,6 +195,10 @@
               <label for="clock_out" class="form-check-label">退勤</label>
             </div>
             <div class="form-check form-check-inline">
+              <input type="radio" name="record_type" value="break_duration" id="break_duration" class="form-check-input">
+              <label for="break_duration" class="form-check-label">休憩時間</label>
+            </div>
+            <div class="form-check form-check-inline">
               <input type="radio" name="record_type" value="paid_vacation" id="paid_vacation" class="form-check-input">
               <label for="paid_vacation" class="form-check-label">有給休暇</label>
             </div>
@@ -208,15 +210,13 @@
               <input type="radio" name="record_type" value="break_end" id="break_end" class="form-check-input">
               <label for="break_end" class="form-check-label">休憩終了</label>
             </div>
-            <div class="form-check form-check-inline">
-              <input type="radio" name="record_type" value="break_duration" id="break_duration" class="form-check-input">
-              <label for="break_duration" class="form-check-label">休憩時間</label>
-            </div>
           </div>
         </div>
         <button type="submit" class="btn btn-success">記録を追加</button>
       </form>
     </div>
+
+
 
 
     <div class="text-center mt-4">
@@ -245,12 +245,34 @@
       return `${year}-${month}`;
     }
   
-    // ページ初期設定
-    window.addEventListener("load", function() {
+    // ローカルストレージから選択された月を取得
+    function getSelectedMonth() {
+      return localStorage.getItem("selectedMonth") || getCurrentMonth();
+    }
+
+    // 対象日 (`record_date`) のカレンダーの表示を `monthSelect` に合わせる
+    function setInitialRecordDate() {
+      const selectedMonth = getSelectedMonth();
+      const [year, month] = selectedMonth.split("-");
+      const firstDay = `${year}-${month}-01`; // その月の1日を取得
+      document.getElementById("record_date").value = firstDay;
+    }
+
+    // `monthSelect` が変更されたら `record_date` もその月の1日に更新
+    document.getElementById("monthSelect").addEventListener("change", function () {
+      const selectedMonth = this.value;
+      localStorage.setItem("selectedMonth", selectedMonth);
+      setInitialRecordDate(); // `record_date` を更新
+      fetchTimeRecords(); // タイムレコーダーデータを更新
+    });
+
+    // ページ読み込み時に `record_date` のカレンダーを設定
+    window.addEventListener("load", function () {
       const monthSelect = document.getElementById("monthSelect");
-      if (!monthSelect.value) {
-        monthSelect.value = getCurrentMonth();
-      }
+      const storedMonth = getSelectedMonth();
+      monthSelect.value = storedMonth;
+      
+      setInitialRecordDate(); // `record_date` を設定
       fetchEmployeeDetail();
       fetchTimeRecords();
   
@@ -543,10 +565,37 @@
             const timeStr = timeParts[0] + ":" + timeParts[1];
       
             const tr = document.createElement("tr");
-      
-            // 種別列
+
+            
+                
+            // 種別列（文字の色のみ変更）
             const tdType = document.createElement("td");
-            tdType.innerText = displayType;
+            const typeSpan = document.createElement("span");
+
+            // 各種別に応じて Bootstrap の `text-*` クラスを適用
+            switch (rec.target_type) {
+              case "clock_in":
+                typeSpan.classList.add("text-success"); // 出勤：緑
+                break;
+              case "clock_out":
+                typeSpan.classList.add("text-danger"); // 退勤：赤
+                break;
+              case "paid_vacation":
+                typeSpan.classList.add("text-warning"); // 有給休暇：黄色
+                break;
+              case "break_start":
+                typeSpan.classList.add("text-info"); // 休憩開始：青
+                break;
+              case "break_end":
+                typeSpan.classList.add("text-secondary"); // 休憩終了：グレー
+                break;
+              case "break_duration":
+                typeSpan.classList.add("text-primary"); // 休憩時間：濃い青
+                break;
+            }
+
+            typeSpan.innerText = displayType;
+            tdType.appendChild(typeSpan);
             tr.appendChild(tdType);
       
             // 対象日時列
@@ -785,7 +834,6 @@
               return response.text();
             })
             .then(data => {
-              alert("記録が追加されました");
               fetchTimeRecords();
             })
             .catch(error => {
