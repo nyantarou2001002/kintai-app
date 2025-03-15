@@ -140,12 +140,25 @@ func addEmployeeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	var emp Employee
 	if err := json.NewDecoder(r.Body).Decode(&emp); err != nil {
-		http.Error(w, "Bad request", http.StatusBadRequest)
-		log.Println("Decode Error:", err)
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
+
+	// 従業員名の重複チェック
+	var existingCount int
+	err := db.QueryRow("SELECT COUNT(*) FROM employees WHERE name = ?", emp.Name).Scan(&existingCount)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Println("Database error:", err)
+		return
+	}
+	if existingCount > 0 {
+		http.Error(w, "従業員名が既に存在します", http.StatusBadRequest)
+		return
+	}
+
 	var jobCode string
-	err := db.QueryRow("SELECT code FROM job_types WHERE name = ?", emp.Job).Scan(&jobCode)
+	err = db.QueryRow("SELECT code FROM job_types WHERE name = ?", emp.Job).Scan(&jobCode)
 	if err == sql.ErrNoRows {
 		http.Error(w, "Invalid job name", http.StatusBadRequest)
 		log.Println("Invalid job name:", emp.Job)
@@ -155,7 +168,7 @@ func addEmployeeHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println("Database error:", err)
 		return
 	}
-	// 交通費も追加したため、SQLのカラムと引数を増やす
+
 	query := "INSERT INTO employees (name, job, job_code, max_attendance_count, paid_vacation_limit, paid_vacation_grant_date, employment_type, hourly_wage, transportation_expense) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
 	result, err := db.Exec(query, emp.Name, emp.Job, jobCode, emp.MaxAttendanceCount, emp.PaidVacationLimit, emp.PaidVacationGrantDate, emp.EmploymentType, emp.HourlyWage, emp.TransportationExpense)
 	if err != nil {
@@ -954,6 +967,17 @@ func getMonthlySummary(year, month int) ([]MonthlySummary, error) {
                 CONCAT(target_date, ' ', MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)),
                 CONCAT(target_date, ' ', MAX(CASE WHEN target_type = 'clock_out' THEN target_time END))
             ) AS work_diff,
+            CASE 
+                WHEN TIMESTAMPDIFF(MINUTE,
+                        CONCAT(target_date, ' ', MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)),
+                        CONCAT(target_date, ' ', MAX(CASE WHEN target_type = 'clock_out' THEN target_time END))
+                     ) - COALESCE(SUM(CASE WHEN target_type = 'break_duration' THEN break_duration ELSE 0 END), 0) > 480 
+                THEN TIMESTAMPDIFF(MINUTE,
+                        CONCAT(target_date, ' ', MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)),
+                        CONCAT(target_date, ' ', MAX(CASE WHEN target_type = 'clock_out' THEN target_time END))
+                     ) - COALESCE(SUM(CASE WHEN target_type = 'break_duration' THEN break_duration ELSE 0 END), 0) - 480
+                ELSE 0
+            END AS extra_min,
             CASE
                 WHEN MAX(CASE WHEN target_type = 'clock_out' THEN target_time END) < MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)
                 THEN
@@ -1006,17 +1030,6 @@ func getMonthlySummary(year, month int) ([]MonthlySummary, error) {
                         END
                     )
             END AS night_diff,
-            CASE 
-                WHEN TIMESTAMPDIFF(MINUTE,
-                        CONCAT(target_date, ' ', MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)),
-                        CONCAT(target_date, ' ', MAX(CASE WHEN target_type = 'clock_out' THEN target_time END))
-                     ) > 480 
-                THEN TIMESTAMPDIFF(MINUTE,
-                        CONCAT(target_date, ' ', MIN(CASE WHEN target_type = 'clock_in' THEN target_time END)),
-                        CONCAT(target_date, ' ', MAX(CASE WHEN target_type = 'clock_out' THEN target_time END))
-                     ) - 480
-                ELSE 0
-            END AS extra_min,
             COALESCE(SUM(CASE WHEN target_type = 'break_duration' THEN break_duration ELSE 0 END), 0) AS break_duration
         FROM work_records
         WHERE target_type IN ('clock_in','clock_out', 'break_duration')
@@ -1090,6 +1103,7 @@ func getMonthlySummary(year, month int) ([]MonthlySummary, error) {
 		// 月給計算
 		workHours := float64(s.TotalWorkMin) / 60.0
 		extraHours := float64(totalExtraMin) / 60.0
+		print(totalExtraMin)
 		nightHours := float64(s.TotalNightShiftMin) / 60.0
 		monthlySalary := float64(s.HourlyWage) * (workHours + (extraHours+nightHours)*0.25)
 
@@ -1097,10 +1111,6 @@ func getMonthlySummary(year, month int) ([]MonthlySummary, error) {
 		monthlySalary += float64(s.TransportationExpense * s.AttendanceDays)
 
 		s.MonthlySalary = int(monthlySalary)
-
-		// 月給計算のデバッグログ
-		log.Printf("EmpNumber: %s, EmpName: %s, HourlyWage: %d, TotalWorkMin: %d, TotalNightShiftMin: %d, AttendanceDays: %d, TransportationExpense: %d, MonthlySalary: %d",
-			s.EmpNumber, s.EmpName, s.HourlyWage, s.TotalWorkMin, s.TotalNightShiftMin, s.AttendanceDays, s.TransportationExpense, s.MonthlySalary)
 
 		summaries = append(summaries, s)
 	}

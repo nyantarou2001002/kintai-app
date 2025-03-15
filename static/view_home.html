@@ -346,7 +346,6 @@
           job: document.getElementById("employee_job").value,
           max_attendance_count: 20,
           paid_vacation_limit: parseInt(document.getElementById("paid_vacation_limit").value, 10),
-          // 入社日から半年後の日付を自動計算して paid_vacation_grant_date とする
           paid_vacation_grant_date: (function() {
             const joiningDateStr = document.getElementById("paid_vacation_grant_date").value;
             const joiningDate = new Date(joiningDateStr);
@@ -366,12 +365,18 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(record)
         })
-          .then(response => response.text())
+          .then(response => {
+            if (!response.ok) {
+              return response.text().then(text => { throw new Error(text); });
+            }
+            return response.json();
+          })
           .then(data => {
-            alert("従業員を追加しました!!");
             fetchEmployees();
           })
-          .catch(error => console.error('エラー:', error));
+          .catch(error => {
+            alert('エラー: ' + error.message);
+          });
       }
     </script>
 

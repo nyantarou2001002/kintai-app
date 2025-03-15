@@ -202,7 +202,6 @@
           return response.json();
         })
         .then(data => {
-          console.log(data); // デバッグ用にデータをコンソールに出力
           const tableBody = document.getElementById('monthlySummaryTableBody');
           tableBody.innerHTML = "";
           if (!data || data.length === 0) {
