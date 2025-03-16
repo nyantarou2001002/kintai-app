@@ -1665,6 +1665,7 @@ func exportExcelHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// パート従業員の打刻データを取得
 	partEmployeeCalendars := make(map[string][]WorkRecord)
 	for _, emp := range monthlySummaries {
 		if emp.EmploymentType == "パート" {
@@ -1679,15 +1680,15 @@ func exportExcelHandler(w http.ResponseWriter, r *http.Request) {
 
 	f := excelize.NewFile()
 
-	// 月次勤怠レポートシート
+	// ※ 月次勤怠レポートシートはそのまま
 	monthlySheet := "月次勤怠レポート"
 	f.NewSheet(monthlySheet)
 	headers := []string{"従業員番号", "従業員名", "時給", "合計勤務時間(分)", "合計夜勤時間(分)", "出勤日数", "交通費往復", "交通費", "月給", "有給取得日数", "メモ"}
 	for i, h := range headers {
-		cell := string(rune('A'+i)) + "1"
+		cell, _ := excelize.ColumnNumberToName(i + 1)
+		cell = fmt.Sprintf("%s1", cell)
 		f.SetCellValue(monthlySheet, cell, h)
 	}
-
 	rowIndex := 2
 	for _, ms := range monthlySummaries {
 		f.SetCellValue(monthlySheet, fmt.Sprintf("A%d", rowIndex), ms.EmpNumber)
@@ -1704,40 +1705,58 @@ func exportExcelHandler(w http.ResponseWriter, r *http.Request) {
 		rowIndex++
 	}
 
-	// パート従業員カレンダーシート
+	// --- パート従業員カレンダーシート（横配置：1列空けて10人ずつ） ---
 	calendarSheet := "パート従業員カレンダー"
 	f.NewSheet(calendarSheet)
 
-	rowIndex = 1
-	daysInMonth := getDaysInMonth(year, month)
-
+	// 対象の「パート」従業員のみを抽出
+	var partEmployees []MonthlySummary
 	for _, ms := range monthlySummaries {
-		if ms.EmploymentType != "パート" {
-			continue
+		if ms.EmploymentType == "パート" {
+			partEmployees = append(partEmployees, ms)
 		}
+	}
 
-		empNum := ms.EmpNumber
-		records := partEmployeeCalendars[empNum]
+	// 配置設定
+	blocksPerRow := 10 // 1行に表示する従業員数
+	blockWidth := 4    // 1人分のカレンダーは4列（「日付」「時間」「分」「合計時間（分）」）
+	// 各ブロックは、1行目：従業員名、2行目：ヘッダー、(daysInMonth)行：各日の記録、1行：合計、さらに2行の余白＝daysInMonth+5行
+	daysInMonth := getDaysInMonth(year, month)
+	blockHeight := daysInMonth + 5
 
-		baseCol := 1
-		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('A'+baseCol)), rowIndex), ms.EmpName)
-		rowIndex++
+	// 各従業員のカレンダーブロックを横に配置する
+	for index, ms := range partEmployees {
+		rowBlock := index / blocksPerRow        // ブロック行番号
+		colBlock := index % blocksPerRow        // 同一行内でのブロック位置
+		startRow := rowBlock*blockHeight + 1    // ブロック開始行
+		startCol := colBlock*(blockWidth+1) + 1 // ブロック開始列（各ブロックの間に1列空ける）
 
-		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('A'+baseCol)), rowIndex), "日付")
-		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('B'+baseCol)), rowIndex), "時間")
-		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('C'+baseCol)), rowIndex), "分")
-		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('D'+baseCol)), rowIndex), "合計時間（分）")
-		rowIndex++
+		// 従業員名をブロックの最上部に表示
+		colName, _ := excelize.ColumnNumberToName(startCol)
+		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", colName, startRow), ms.EmpName)
 
+		// ヘッダー行（startRow+1）を出力
+		headerRow := startRow + 1
+		col1, _ := excelize.ColumnNumberToName(startCol)
+		col2, _ := excelize.ColumnNumberToName(startCol + 1)
+		col3, _ := excelize.ColumnNumberToName(startCol + 2)
+		col4, _ := excelize.ColumnNumberToName(startCol + 3)
+		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", col1, headerRow), "日付")
+		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", col2, headerRow), "時間")
+		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", col3, headerRow), "分")
+		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", col4, headerRow), "合計時間（分）")
+
+		// 対象従業員の打刻記録を日付ごとに集計
+		records := partEmployeeCalendars[ms.EmpNumber]
 		dailyRecords := make(map[string][]WorkRecord)
 		for _, rec := range records {
 			dailyRecords[rec.TargetDate] = append(dailyRecords[rec.TargetDate], rec)
 		}
 
 		totalMinutes := 0
-		totalHours := 0
-		totalRemainingMinutes := 0
+		// 各日の記録
 		for day := 1; day <= daysInMonth; day++ {
+			currentRow := headerRow + day
 			dateStr := fmt.Sprintf("%04d-%02d-%02d", year, month, day)
 			workMinutes := 0
 			if recs, exists := dailyRecords[dateStr]; exists {
@@ -1754,25 +1773,26 @@ func exportExcelHandler(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 				workMinutes = calculateWorkMinutes(clockIn, clockOut) - breakDuration
+				if workMinutes < 0 {
+					workMinutes = 0
+				}
 			}
 			totalMinutes += workMinutes
-			totalHours += workMinutes / 60
-			totalRemainingMinutes += workMinutes % 60
-			f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('A'+baseCol)), rowIndex), fmt.Sprintf("%d月%d日", month, day))
-			f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('B'+baseCol)), rowIndex), workMinutes/60)
-			f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('C'+baseCol)), rowIndex), workMinutes%60)
-			f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('D'+baseCol)), rowIndex), workMinutes)
-			rowIndex++
+
+			f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", col1, currentRow), fmt.Sprintf("%d月%d日", month, day))
+			f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", col2, currentRow), workMinutes/60)
+			f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", col3, currentRow), workMinutes%60)
+			f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", col4, currentRow), workMinutes)
 		}
 
-		// 合計行を追加
-		totalHours += totalRemainingMinutes / 60
-		totalRemainingMinutes = totalRemainingMinutes % 60
-		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('A'+baseCol)), rowIndex), "合計")
-		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('B'+baseCol)), rowIndex), totalHours)
-		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('C'+baseCol)), rowIndex), totalRemainingMinutes)
-		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('D'+baseCol)), rowIndex), totalMinutes)
-		rowIndex += 2
+		// 合計行（ヘッダー行の直下＋日数＋1行目）
+		totalRow := headerRow + daysInMonth + 1
+		totalHours := totalMinutes / 60
+		totalRemaining := totalMinutes % 60
+		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", col1, totalRow), "合計")
+		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", col2, totalRow), totalHours)
+		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", col3, totalRow), totalRemaining)
+		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", col4, totalRow), totalMinutes)
 	}
 
 	f.DeleteSheet("Sheet1")
