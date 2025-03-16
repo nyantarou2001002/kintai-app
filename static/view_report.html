@@ -130,8 +130,8 @@
                 <th>出勤日数</th>
                 <th>交通費往復</th>
                 <th>交通費</th>
-                <th>今月の有給取得日数</th>
                 <th>月給</th>
+                <th>今月の有給取得日数</th>
                 <th>メモ</th>
               </tr>
             </thead>
@@ -239,8 +239,8 @@
               <td>${item.attendance_days !== null ? item.attendance_days + "日" : ''}</td>
               <td>${transportationRoundTrip}円</td>
               <td>${transportationCost}円</td>
-              <td>${item.paid_vacation_taken || 0}日</td>
-              <td>${item.monthly_salary !== null ? item.monthly_salary + "円" : ''}</td>
+              <td>${item.monthly_salary !== null ? item.monthly_salary + "円" : ''}</td> <!-- 位置を変更 -->
+              <td>${item.paid_vacation_taken || 0}日</td> <!-- 位置を変更 -->
               <td>${memoInput}</td>
             `;
             tableBody.appendChild(tr);

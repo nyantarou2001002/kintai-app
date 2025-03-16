@@ -1678,55 +1678,55 @@ func exportExcelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	f := excelize.NewFile()
-	sheetName := "勤怠レポート"
-	f.NewSheet(sheetName)
 
-	headers := []string{"従業員番号", "従業員名", "時給", "合計勤務時間(分)", "合計夜勤時間(分)", "出勤日数", "交通費往復", "交通費", "有給取得日数", "月給", "メモ"}
+	// 月次勤怠レポートシート
+	monthlySheet := "月次勤怠レポート"
+	f.NewSheet(monthlySheet)
+	headers := []string{"従業員番号", "従業員名", "時給", "合計勤務時間(分)", "合計夜勤時間(分)", "出勤日数", "交通費往復", "交通費", "月給", "有給取得日数", "メモ"}
 	for i, h := range headers {
 		cell := string(rune('A'+i)) + "1"
-		f.SetCellValue(sheetName, cell, h)
+		f.SetCellValue(monthlySheet, cell, h)
 	}
 
 	rowIndex := 2
 	for _, ms := range monthlySummaries {
-		f.SetCellValue(sheetName, fmt.Sprintf("A%d", rowIndex), ms.EmpNumber)
-		f.SetCellValue(sheetName, fmt.Sprintf("B%d", rowIndex), ms.EmpName)
-		f.SetCellValue(sheetName, fmt.Sprintf("I%d", rowIndex), ms.PaidVacationTaken)
-		f.SetCellValue(sheetName, fmt.Sprintf("K%d", rowIndex), ms.Memo)
-
-		if ms.EmploymentType == "パート" {
-			f.SetCellValue(sheetName, fmt.Sprintf("C%d", rowIndex), ms.HourlyWage)
-			f.SetCellValue(sheetName, fmt.Sprintf("D%d", rowIndex), ms.TotalWorkMin)
-			f.SetCellValue(sheetName, fmt.Sprintf("E%d", rowIndex), ms.TotalNightShiftMin)
-			f.SetCellValue(sheetName, fmt.Sprintf("F%d", rowIndex), ms.AttendanceDays)
-			f.SetCellValue(sheetName, fmt.Sprintf("G%d", rowIndex), ms.TransportationExpense)
-			f.SetCellValue(sheetName, fmt.Sprintf("H%d", rowIndex), ms.TransportationExpense*ms.AttendanceDays)
-			f.SetCellValue(sheetName, fmt.Sprintf("J%d", rowIndex), ms.MonthlySalary)
-		}
+		f.SetCellValue(monthlySheet, fmt.Sprintf("A%d", rowIndex), ms.EmpNumber)
+		f.SetCellValue(monthlySheet, fmt.Sprintf("B%d", rowIndex), ms.EmpName)
+		f.SetCellValue(monthlySheet, fmt.Sprintf("C%d", rowIndex), ms.HourlyWage)
+		f.SetCellValue(monthlySheet, fmt.Sprintf("D%d", rowIndex), ms.TotalWorkMin)
+		f.SetCellValue(monthlySheet, fmt.Sprintf("E%d", rowIndex), ms.TotalNightShiftMin)
+		f.SetCellValue(monthlySheet, fmt.Sprintf("F%d", rowIndex), ms.AttendanceDays)
+		f.SetCellValue(monthlySheet, fmt.Sprintf("G%d", rowIndex), ms.TransportationExpense)
+		f.SetCellValue(monthlySheet, fmt.Sprintf("H%d", rowIndex), ms.TransportationExpense*ms.AttendanceDays)
+		f.SetCellValue(monthlySheet, fmt.Sprintf("I%d", rowIndex), ms.MonthlySalary)
+		f.SetCellValue(monthlySheet, fmt.Sprintf("J%d", rowIndex), ms.PaidVacationTaken)
+		f.SetCellValue(monthlySheet, fmt.Sprintf("K%d", rowIndex), ms.Memo)
 		rowIndex++
 	}
 
-	rowIndex += 2
+	// パート従業員カレンダーシート
+	calendarSheet := "パート従業員カレンダー"
+	f.NewSheet(calendarSheet)
+
+	rowIndex = 1
 	daysInMonth := getDaysInMonth(year, month)
 
-	colOffset := 0
-	for empNum, records := range partEmployeeCalendars {
-		var empName string
-		for _, ms := range monthlySummaries {
-			if ms.EmpNumber == empNum {
-				empName = ms.EmpName
-				break
-			}
+	for _, ms := range monthlySummaries {
+		if ms.EmploymentType != "パート" {
+			continue
 		}
 
-		baseCol := colOffset*5 + 1
-		f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('A'+baseCol)), rowIndex), empName)
+		empNum := ms.EmpNumber
+		records := partEmployeeCalendars[empNum]
+
+		baseCol := 1
+		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('A'+baseCol)), rowIndex), ms.EmpName)
 		rowIndex++
 
-		f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('A'+baseCol)), rowIndex), "日付")
-		f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('B'+baseCol)), rowIndex), "時間")
-		f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('C'+baseCol)), rowIndex), "分")
-		f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('D'+baseCol)), rowIndex), "合計時間（分）")
+		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('A'+baseCol)), rowIndex), "日付")
+		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('B'+baseCol)), rowIndex), "時間")
+		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('C'+baseCol)), rowIndex), "分")
+		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('D'+baseCol)), rowIndex), "合計時間（分）")
 		rowIndex++
 
 		dailyRecords := make(map[string][]WorkRecord)
@@ -1758,22 +1758,21 @@ func exportExcelHandler(w http.ResponseWriter, r *http.Request) {
 			totalMinutes += workMinutes
 			totalHours += workMinutes / 60
 			totalRemainingMinutes += workMinutes % 60
-			f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('A'+baseCol)), rowIndex), fmt.Sprintf("%d月%d日", month, day))
-			f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('B'+baseCol)), rowIndex), workMinutes/60)
-			f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('C'+baseCol)), rowIndex), workMinutes%60)
-			f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('D'+baseCol)), rowIndex), workMinutes)
+			f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('A'+baseCol)), rowIndex), fmt.Sprintf("%d月%d日", month, day))
+			f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('B'+baseCol)), rowIndex), workMinutes/60)
+			f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('C'+baseCol)), rowIndex), workMinutes%60)
+			f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('D'+baseCol)), rowIndex), workMinutes)
 			rowIndex++
 		}
 
 		// 合計行を追加
 		totalHours += totalRemainingMinutes / 60
 		totalRemainingMinutes = totalRemainingMinutes % 60
-		f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('A'+baseCol)), rowIndex), "合計")
-		f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('B'+baseCol)), rowIndex), totalHours)
-		f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('C'+baseCol)), rowIndex), totalRemainingMinutes)
-		f.SetCellValue(sheetName, fmt.Sprintf("%s%d", string(rune('D'+baseCol)), rowIndex), totalMinutes)
-		colOffset++
-		rowIndex -= daysInMonth + 3
+		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('A'+baseCol)), rowIndex), "合計")
+		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('B'+baseCol)), rowIndex), totalHours)
+		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('C'+baseCol)), rowIndex), totalRemainingMinutes)
+		f.SetCellValue(calendarSheet, fmt.Sprintf("%s%d", string(rune('D'+baseCol)), rowIndex), totalMinutes)
+		rowIndex += 2
 	}
 
 	f.DeleteSheet("Sheet1")
