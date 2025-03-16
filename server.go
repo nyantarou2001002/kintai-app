@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -1101,16 +1102,24 @@ func getMonthlySummary(year, month int) ([]MonthlySummary, error) {
 		}
 
 		// 月給計算
-		workHours := float64(s.TotalWorkMin) / 60.0
-		extraHours := float64(totalExtraMin) / 60.0
-		print(totalExtraMin)
-		nightHours := float64(s.TotalNightShiftMin) / 60.0
-		monthlySalary := float64(s.HourlyWage) * (workHours + (extraHours+nightHours)*0.25)
+		// workHours := float64(s.TotalWorkMin) / 60.0
+		// extraHours := float64(totalExtraMin) / 60.0
+		// nightHours := float64(s.TotalNightShiftMin) / 60.0
+		// extraSalary := float64(s.HourlyWage) * (extraHours + nightHours) * 0.25
+		// extraSalary = math.Ceil(extraSalary)
+		// monthlySalary := float64(s.HourlyWage)*workHours + extraSalary
+		// print(monthlySalary)
+		workhours := s.TotalWorkMin / 60
+		workminutes := s.TotalWorkMin % 60
+		extraHours := totalExtraMin + s.TotalNightShiftMin
+		normalsalary := s.HourlyWage*workhours + int(math.Ceil(float64(s.HourlyWage*workminutes)/60.0))
+		extrasalary := int(math.Ceil(float64(extraHours) / 60.0 * float64(s.HourlyWage) * 0.25))
+		monthlySalary := normalsalary + extrasalary
 
 		// 交通費を加算
-		monthlySalary += float64(s.TransportationExpense * s.AttendanceDays)
+		monthlySalary += s.TransportationExpense * s.AttendanceDays
 
-		s.MonthlySalary = int(monthlySalary)
+		s.MonthlySalary = monthlySalary
 
 		summaries = append(summaries, s)
 	}
