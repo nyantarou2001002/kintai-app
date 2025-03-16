@@ -74,6 +74,12 @@
         <button class="btn btn-warning btn-custom" onclick="recordImmediate('clock_out')">退勤</button>
       </div>
 
+      <!-- 休憩時間入力欄と休憩登録ボタンを追加 -->
+      <div class="text-center mb-4">
+        <input type="number" id="breakDurationInput" class="form-control d-inline-block" style="width:150px;" placeholder="休憩時間（分）">
+        <button class="btn btn-info btn-custom" onclick="recordImmediate('break_duration')">休憩登録</button>
+      </div>
+
       <div class="mb-4 ">
         <h2 class="text-center header-title">有給休暇登録</h3>
         <form onsubmit="return handlePaidVacationSubmit(this)" class="text-center">
@@ -137,6 +143,17 @@
         target_type: type
       };
 
+      // 休憩時間登録の場合、入力値をペイロードに追加
+      if (type === 'break_duration') {
+        const breakDurationValue = document.getElementById("breakDurationInput").value;
+        const breakDuration = parseInt(breakDurationValue, 10);
+        if (isNaN(breakDuration)) {
+          alert("休憩時間を正しく入力してください");
+          return;
+        }
+        record.break_duration = breakDuration;
+      }
+
       fetch('/api/saveWorkRecord', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -151,6 +168,7 @@
       .then(data => alert(data))
       .catch(error => console.error('エラー:', error));
     }
+
 
     function handlePaidVacationSubmit(formObject) {
       const empSelect = document.getElementById("employeeSelect");
