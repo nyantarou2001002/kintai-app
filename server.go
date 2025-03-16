@@ -1270,47 +1270,42 @@ func updateWorkRecordHandler(w http.ResponseWriter, r *http.Request) {
 		NewTargetDate string `json:"new_target_date"` // ※通常更新の場合使用
 		NewTargetTime string `json:"new_target_time"` // ※通常更新の場合は時刻、break_durationの場合は新しい分数の文字列
 	}
+
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Bad request", http.StatusBadRequest)
-		log.Println("Decode Error in /api/updateWorkRecord:", err)
+		log.Println("Failed to decode request:", err)
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
 
+	log.Printf("Received update request: %+v\n", req)
+
+	var query string
+	var args []interface{}
+
 	// 休憩時間の場合は、break_durationカラムを更新する
 	if req.TargetType == "break_duration" {
-		// 休憩時間は分数として扱うので、NewTargetTimeは分数の文字列で送られてくる
-		newMinutes, err := strconv.Atoi(req.NewTargetTime)
+		// new_target_time を数値に変換
+		breakDuration, err := strconv.Atoi(req.NewTargetTime)
 		if err != nil {
+			log.Println("Invalid break duration:", err)
 			http.Error(w, "Invalid break duration", http.StatusBadRequest)
 			return
 		}
-		// ここでは、target_timeは固定値"00:00"となっている前提で更新する
-		result, err := db.Exec("UPDATE work_records SET break_duration = ? WHERE employee_id = ? AND target_date = ? AND target_type = ?",
-			newMinutes, req.EmployeeID, req.OldTargetDate, req.TargetType)
-		if err != nil {
-			http.Error(w, "Database error", http.StatusInternalServerError)
-			log.Println("Update Error in /api/updateWorkRecord (break_duration):", err)
-			return
-		}
-		rowsAffected, err := result.RowsAffected()
-		if err != nil || rowsAffected == 0 {
-			http.Error(w, "Record not found or update failed", http.StatusNotFound)
-			return
-		}
+		query = "UPDATE work_records SET break_duration = ? WHERE employee_id = ? AND target_date = ? AND target_type = 'break_duration'"
+		args = []interface{}{breakDuration, req.EmployeeID, req.OldTargetDate}
 	} else {
 		// 通常の更新（出勤、退勤、休憩開始、休憩終了）では、target_dateとtarget_timeでレコードを特定
-		result, err := db.Exec("UPDATE work_records SET target_date = ?, target_time = ? WHERE employee_id = ? AND target_date = ? AND target_time = ? AND target_type = ?",
-			req.NewTargetDate, req.NewTargetTime, req.EmployeeID, req.OldTargetDate, req.OldTargetTime, req.TargetType)
-		if err != nil {
-			http.Error(w, "Database error", http.StatusInternalServerError)
-			log.Println("Update Error in /api/updateWorkRecord:", err)
-			return
-		}
-		rowsAffected, err := result.RowsAffected()
-		if err != nil || rowsAffected == 0 {
-			http.Error(w, "Record not found or update failed", http.StatusNotFound)
-			return
-		}
+		query = "UPDATE work_records SET target_date = ?, target_time = ? WHERE employee_id = ? AND target_date = ? AND target_time = ? AND target_type = ?"
+		args = []interface{}{req.NewTargetDate, req.NewTargetTime, req.EmployeeID, req.OldTargetDate, req.OldTargetTime, req.TargetType}
+	}
+
+	log.Printf("Executing query: %s with args: %+v\n", query, args)
+
+	_, err := db.Exec(query, args...)
+	if err != nil {
+		log.Println("Database error:", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
