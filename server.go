@@ -1852,6 +1852,60 @@ func calculateWorkMinutes(clockIn, clockOut string) int {
 	return (outH*60 + outM) - (inH*60 + inM)
 }
 
+// 職種更新API
+// デバッグ用：職種更新API
+// 職種更新API（デバッグ用ログ付き・変更がない場合も正常終了とする）
+func updateJobTypeHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("updateJobTypeHandler: Request received.")
+	log.Printf("Request URL: %s, Method: %s\n", r.URL.String(), r.Method)
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		log.Println("updateJobTypeHandler: Invalid method:", r.Method)
+		return
+	}
+
+	var req struct {
+		Code string `json:"code"`
+		Name string `json:"name"`
+	}
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		log.Println("updateJobTypeHandler: Error decoding JSON:", err)
+		return
+	}
+	log.Printf("updateJobTypeHandler: Received payload: %+v\n", req)
+
+	query := "UPDATE job_types SET name = ? WHERE code = ?"
+	log.Printf("updateJobTypeHandler: Executing query: %s with params: name=%s, code=%s\n", query, req.Name, req.Code)
+	result, err := db.Exec(query, req.Name, req.Code)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Println("updateJobTypeHandler: Database error:", err)
+		return
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		http.Error(w, "Error fetching update result", http.StatusInternalServerError)
+		log.Println("updateJobTypeHandler: Error fetching rows affected:", err)
+		return
+	}
+	log.Printf("updateJobTypeHandler: Rows affected: %d\n", rowsAffected)
+
+	// 更新前と同じ値の場合 rowsAffected は 0 になるため、これはエラーではなく正常終了とする
+	if rowsAffected == 0 {
+		log.Println("updateJobTypeHandler: No rows updated. (可能性：更新値が既存の値と同じ)")
+		// ここではエラーを返さず、成功としてレスポンスを返す
+	} else {
+		log.Printf("updateJobTypeHandler: Successfully updated job type: %+v\n", req)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(req)
+}
+
 func main() {
 	initDB()
 	initializeSecretAnswer()
@@ -1880,6 +1934,7 @@ func main() {
 	http.HandleFunc("/api/secretReset", secretResetHandler)
 	http.HandleFunc("/api/saveMonthlyMemo", saveMonthlyMemoHandler)
 	http.HandleFunc("/api/exportExcel", exportExcelHandler)
+	http.HandleFunc("/api/updateJobType", updateJobTypeHandler)
 
 	// その後、静的ファイルサーバーを登録する
 	http.Handle("/", http.FileServer(http.Dir("./static")))

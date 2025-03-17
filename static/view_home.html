@@ -385,43 +385,92 @@
     
 
     <script>
-      // 職種一覧を取得し、プルダウンに追加
       function fetchJobTypes() {
-        fetch('/api/jobTypes')
-          .then(response => response.json())
-          .then(data => {
-            // 2. 職種選択プルダウンを更新
-            const select = document.getElementById("employee_job");
-            select.innerHTML = '<option value="">-- 職種を選択してください --</option>';
-            data.forEach(job => {
-              const option = document.createElement("option");
-              option.value = job.name;  // 職種名を送信
-              option.textContent = `${job.name} (${job.code})`;
-              select.appendChild(option);
-            });
+  fetch('/api/jobTypes')
+    .then(response => response.json())
+    .then(data => {
+      // 職種一覧テーブルの更新
+      const tableBody = document.getElementById("jobTypeTableBody");
+      tableBody.innerHTML = ""; // 既存データをクリア
 
-            // 1. 職種一覧テーブルを更新
-            const tableBody = document.getElementById("jobTypeTableBody");
-            tableBody.innerHTML = ""; // 既存データをクリア
+      data.forEach(job => {
+        const row = document.createElement("tr");
+        // 職種名部分を span でラップし、data-code属性に職種コードを保持
+        row.innerHTML = `
+          <td>${job.code}</td>
+          <td><span class="editable-job-name" data-code="${job.code}">${job.name}</span></td>
+          <td>
+            <button class="btn btn-danger btn-sm" onclick="handleDeleteJobType('${job.code}')">
+              削除
+            </button>
+          </td>
+        `;
+        tableBody.appendChild(row);
+      });
 
-            data.forEach(job => {
-              const row = document.createElement("tr");
-              row.innerHTML = `
-                <td>${job.code}</td>
-                <td>${job.name}</td>
-                <td>
-                  <button class="btn btn-danger btn-sm" onclick="handleDeleteJobType('${job.code}')">
-                    削除
-                  </button>
-                </td>
-              `;
-              tableBody.appendChild(row);
-            });
+      // span要素に編集イベントを付与
+  document.querySelectorAll('.editable-job-name').forEach(span => {
+    span.addEventListener('click', function() {
+      // 既にinputが存在していなければ編集モードにする
+      if (this.querySelector('input')) return;
+      const currentName = this.innerText;
+      const code = this.dataset.code;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = currentName;
+      input.className = 'form-control';
+      input.style.width = '80%';
 
-
+      // 入力完了（Enterキーまたはblur）時に更新
+      function finishEditing() {
+        const newName = input.value.trim();
+        if (newName && newName !== currentName) {
+          // デバッグ用ログ
+          console.log("Sending update request:", { code: code, name: newName });
+          // APIに更新リクエストを送信
+          fetch('/api/updateJobType', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: code, name: newName })
           })
-          .catch(error => console.error('職種取得エラー:', error));
+          .then(response => {
+            console.log("Response status:", response.status);
+            if (!response.ok) {
+              throw new Error('更新に失敗しました');
+            }
+            return response.json();
+          })
+          .then(data => {
+            console.log("Update response data:", data);
+            span.innerText = data.name;
+          })
+          .catch(error => {
+            console.error("Error during update:", error);
+            alert(error.message);
+            span.innerText = currentName;
+          });
+        } else {
+          span.innerText = currentName;
+        }
       }
+
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          finishEditing();
+        }
+      });
+      input.addEventListener('blur', finishEditing);
+
+      // spanの中身をinputに置換
+      span.innerHTML = '';
+      span.appendChild(input);
+      input.focus();
+    });
+  });
+    })
+    .catch(error => console.error('職種取得エラー:', error));
+}
+
 
       function handleDeleteJobType(jobCode) {
         if (!confirm(`職種コード ${jobCode} を削除しますか？`)) {

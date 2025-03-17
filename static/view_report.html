@@ -254,40 +254,46 @@
     }
 
     // 職種別勤怠レポートを取得してテーブルに表示
-    function fetchJobSummary() {
-      const month = document.getElementById("monthSelect").value;
-      fetch('/api/jobSummary?month=' + month)
-        .then(response => {
-          if (!response.ok) {
-            throw new Error('職種別勤怠レポートの取得に失敗しました');
-          }
-          return response.json();
-        })
-        .then(data => {
-          const tableBody = document.getElementById('jobSummaryTableBody');
-          tableBody.innerHTML = "";
-          if (!data || data.length === 0) {
-            tableBody.innerHTML = `<tr><td colspan="5" class="text-center">情報がありません</td></tr>`;
-            return;
-          }
-          data.forEach(item => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-              <td>${item.job_code}</td>
-              <td>${item.job_name}</td>
-              <td>${item.total_work_min}</td>
-              <td>${item.total_night_shift_min}</td>
-              <td>${item.monthly_salary}</td>
-            `;
-            tableBody.appendChild(tr);
-          });
-        })
-        .catch(error => {
-          const tableBody = document.getElementById('jobSummaryTableBody');
+  function fetchJobSummary() {
+    const month = document.getElementById("monthSelect").value;
+    fetch('/api/jobSummary?month=' + month)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('職種別勤怠レポートの取得に失敗しました');
+        }
+        return response.json();
+      })
+      .then(data => {
+        const tableBody = document.getElementById('jobSummaryTableBody');
+        tableBody.innerHTML = "";
+        if (!data || data.length === 0) {
           tableBody.innerHTML = `<tr><td colspan="5" class="text-center">情報がありません</td></tr>`;
-          console.error(error);
+          return;
+        }
+        data.forEach(item => {
+          // 合計勤務時間と合計夜勤時間を時間表示に変換
+          const totalWorkHours = Math.floor(item.total_work_min / 60);
+          const totalWorkMinutes = item.total_work_min % 60;
+          const totalNightShiftHours = Math.floor(item.total_night_shift_min / 60);
+          const totalNightShiftMinutes = item.total_night_shift_min % 60;
+
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${item.job_code}</td>
+            <td>${item.job_name}</td>
+            <td>${totalWorkHours}時間${totalWorkMinutes}分</td>
+            <td>${totalNightShiftHours}時間${totalNightShiftMinutes}分</td>
+            <td>${item.monthly_salary}</td>
+          `;
+          tableBody.appendChild(tr);
         });
-    }
+      })
+      .catch(error => {
+        const tableBody = document.getElementById('jobSummaryTableBody');
+        tableBody.innerHTML = `<tr><td colspan="5" class="text-center">情報がありません</td></tr>`;
+        console.error(error);
+      });
+  }
 
     // パート従業員一覧を取得してドロップダウンにセットする
     function loadPartEmployees() {
