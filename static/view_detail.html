@@ -167,27 +167,6 @@
     <div id="newTimeRecord" class="mt-4">
       <h3 class="section-title">新規タイムレコーダー記録</h3>
       <form id="newTimeRecordForm" onsubmit="handleNewTimeRecord(event)">
-      <!-- 変更箇所: 184行目から -->
-      <div class="row mb-3">
-        <div class="col-md-6">
-          <div class="row">
-            <div class="col-md-6">
-              <label for="record_date" class="form-label">対象日:</label>
-              <input type="date" id="record_date" class="form-control" required>
-            </div>
-            <div class="col-md-6">
-              <label for="record_time" class="form-label">対象時刻:</label>
-              <input type="time" id="record_time" class="form-control" required>
-            </div>
-          </div>
-        </div>
-      </div>
-      <!-- 変更箇所ここまで -->
-      <div class="mb-3" id="breakDurationContainer">
-        <label for="break_duration" class="form-label">休憩時間（分）:</label>
-        <input type="number" id="break_duration" class="form-control w-50" min="0" placeholder="例: 30" disabled>
-      </div>
-      
         <div class="mb-3">
           <label class="form-label">種別:</label>
           <div>
@@ -209,6 +188,28 @@
             </div>
           </div>
         </div>
+      <!-- 変更箇所: 184行目から -->
+      <div class="row mb-3">
+        <div class="col-md-6">
+          <div class="row">
+            <div class="col-md-6">
+              <label for="record_date" class="form-label">対象日:</label>
+              <input type="date" id="record_date" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label for="record_time" class="form-label">対象時刻:</label>
+              <input type="time" id="record_time" class="form-control" required>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- 変更箇所ここまで -->
+      <div class="mb-3" id="breakDurationContainer">
+        <label for="break_duration" class="form-label">休憩時間（分）:</label>
+        <input type="number" id="break_duration" class="form-control w-50" min="0" placeholder="例: 30" disabled>
+      </div>
+      
+        
         <button type="submit" class="btn btn-success">記録を追加</button>
       </form>
     </div>
@@ -279,13 +280,13 @@
           const timeInput = document.getElementById("record_time");
           const breakDurationInput = document.getElementById("break_duration");
           
-          // record_time の扱いは、有給休暇の場合のみ disable にする例
-          if (this.value === "paid_vacation") {
-            timeInput.value = "00:00";
-            timeInput.disabled = true;
-          } else {
-            timeInput.disabled = false;
-          }
+          // record_time の扱いは、有給休暇および休憩時間の場合のみ disable にする
+        if (this.value === "paid_vacation" || this.value === "break_duration") {
+          timeInput.value = "00:00";
+          timeInput.disabled = true;
+        } else {
+          timeInput.disabled = false;
+        }
           
           // 「休憩時間」ラジオが選択された場合のみ、休憩時間入力欄を編集可能にする
           if (this.value === "break_duration") {
