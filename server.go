@@ -659,6 +659,7 @@ func deleteTimeRecordHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
 	var req struct {
 		EmployeeID int    `json:"employee_id"`
 		TargetDate string `json:"target_date"`
@@ -670,18 +671,33 @@ func deleteTimeRecordHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println("Decode Error in /api/deleteTimeRecord:", err)
 		return
 	}
-	query := "DELETE FROM work_records WHERE employee_id = ? AND target_date = ? AND target_time = ? AND target_type = ?"
-	result, err := db.Exec(query, req.EmployeeID, req.TargetDate, req.TargetTime, req.TargetType)
+
+	var query string
+	var args []interface{}
+
+	// もし TargetTime と TargetType が空の場合、対象日の全レコードを削除
+	if req.TargetTime == "" && req.TargetType == "" {
+		query = "DELETE FROM work_records WHERE employee_id = ? AND target_date = ?"
+		args = []interface{}{req.EmployeeID, req.TargetDate}
+	} else {
+		query = "DELETE FROM work_records WHERE employee_id = ? AND target_date = ? AND target_time = ? AND target_type = ?"
+		args = []interface{}{req.EmployeeID, req.TargetDate, req.TargetTime, req.TargetType}
+	}
+
+	result, err := db.Exec(query, args...)
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		log.Println("Delete Error in /api/deleteTimeRecord:", err)
 		return
 	}
+
 	rowsAffected, err := result.RowsAffected()
 	if err != nil || rowsAffected == 0 {
 		http.Error(w, "Time record not found or already deleted", http.StatusNotFound)
+		log.Println("No record found with specified details:", req)
 		return
 	}
+
 	w.Header().Set("Content-Type", "text/plain")
 	w.Write([]byte("タイムレコーダー記録を削除しました"))
 }
@@ -1115,6 +1131,17 @@ func getMonthlySummary(year, month int) ([]MonthlySummary, error) {
 		normalsalary := s.HourlyWage*workhours + int(math.Ceil(float64(s.HourlyWage*workminutes)/60.0))
 		extrasalary := int(math.Ceil(float64(extraHours) / 60.0 * float64(s.HourlyWage) * 0.25))
 		monthlySalary := normalsalary + extrasalary
+		print("workhours")
+		print(workhours)
+		print("workminutes")
+		print(workminutes)
+		print("extraHours")
+		print(extraHours)
+		print("normalsalary")
+		print(normalsalary)
+		print(extrasalary)
+		print("monthlySalary")
+		print(monthlySalary)
 
 		// 交通費を加算
 		monthlySalary += s.TransportationExpense * s.AttendanceDays
