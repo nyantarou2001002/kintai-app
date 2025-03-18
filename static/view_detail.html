@@ -193,7 +193,7 @@
       </div>
 
       <!-- 新規タイムレコーダー記録フォーム -->
-      <div id="newTimeRecord" class="mt-4">
+      <div id="newTimeRecord" class="mt-4" style="display: none;">
         <h3 class="section-title">新規タイムレコーダー記録</h3>
         <form id="newTimeRecordForm" onsubmit="handleNewTimeRecord(event)">
           <div class="mb-3">
@@ -526,24 +526,245 @@
           const tbody = document.getElementById("timeRecordsBody");
           tbody.innerHTML = "";
           if (!records || records.length === 0) {
-            const [year, mon] = document.getElementById("monthSelect").value.split("-");
-            const daysInMonth = new Date(parseInt(year), parseInt(mon), 0).getDate();
-            for (let day = 1; day <= daysInMonth; day++) {
-              const dayStr = day.toString().padStart(2, "0");
-              const tr = document.createElement("tr");
-              tr.innerHTML = `
-                <td>${mon}/${dayStr}</td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-              `;
-              tbody.appendChild(tr);
-            }
-            document.getElementById("display_paid_vacation_count_monthly").innerText = 0;
-            return;
+  const [year, mon] = document.getElementById("monthSelect").value.split("-");
+  const daysInMonth = new Date(parseInt(year), parseInt(mon), 0).getDate();
+  
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dayStr = day.toString().padStart(2, "0");
+    const dateStr = `${year}-${mon}-${dayStr}`;
+    
+    const tr = document.createElement("tr");
+    
+    // 日付セル
+    const tdDate = document.createElement("td");
+    tdDate.innerText = `${mon}/${dayStr}`;
+    tr.appendChild(tdDate);
+    
+    // 出勤時間セル - 操作可能に
+    const tdWorkTime = document.createElement("td");
+    tdWorkTime.innerHTML = `<span class="editable-time" data-type="clock_in_new" data-date="${dateStr}" data-employee-id="${currentEmployeeId}" style="color: #888; cursor: pointer;">－:－</span>`;
+    tr.appendChild(tdWorkTime);
+    
+    // 休憩時間セル
+    const tdBreakTime = document.createElement("td");
+    tdBreakTime.innerHTML = `<span class="editable-time" data-type="break_duration" data-date="${dateStr}" data-time="00:00" data-employee-id="${currentEmployeeId}" style="cursor: pointer; min-width: 50px; display: inline-block;">&nbsp;</span>`;
+    tr.appendChild(tdBreakTime);
+    
+    // 有給休暇セル
+    const tdPaidVacation = document.createElement("td");
+    tdPaidVacation.innerHTML = `<i class="fa-regular fa-square"></i>`;
+    tdPaidVacation.style.cursor = "pointer";
+    tdPaidVacation.addEventListener("click", function() {
+      const payload = {
+        employee_id: currentEmployeeId,
+        target_date: dateStr,
+        target_time: "00:00",
+        target_type: "paid_vacation"
+      };
+      fetch("/api/saveWorkRecord", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error("有給休暇記録の追加に失敗しました");
+        }
+        return response.text();
+      })
+      .then(() => {
+        fetchTimeRecords(); // テーブル全体を更新
+      })
+      .catch(error => {
+        alert(error.message);
+      });
+    });
+    tr.appendChild(tdPaidVacation);
+    
+    // メモセル
+    const tdMemo = document.createElement("td");
+    const memoInput = document.createElement("input");
+    memoInput.type = "text";
+    memoInput.className = "form-control";
+    memoInput.value = "";
+    memoInput.addEventListener("input", function() {
+      debouncedSaveMemo(this, currentEmployeeId, dateStr, "");
+    });
+    tdMemo.appendChild(memoInput);
+    tr.appendChild(tdMemo);
+    
+    // 操作セル
+    const tdOp = document.createElement("td");
+    const delBtn = document.createElement("button");
+    delBtn.className = "btn btn-danger btn-sm";
+    delBtn.innerText = "削除";
+    delBtn.disabled = true; // 最初は無効化
+    tdOp.appendChild(delBtn);
+    tr.appendChild(tdOp);
+    
+    tbody.appendChild(tr);
+  }
+  
+  document.getElementById("display_paid_vacation_count_monthly").innerText = 0;
+  
+  // editable-time のクリックイベント設定
+  document.querySelectorAll(".editable-time").forEach(span => {
+    span.addEventListener("click", function() {
+      const type = span.dataset.type;
+      const date = span.dataset.date;
+      const employeeId = parseInt(span.dataset.employeeId, 10) || currentEmployeeId;
+
+      if (type === "clock_in_new") {
+        // 新規入力用：出勤と退勤の時間入力欄
+        const container = document.createElement("span");
+        container.innerHTML = `
+          <div class="d-inline-flex align-items-center">
+            <input type="time" id="new_clock_in_${date}" class="form-control form-control-sm" value="09:00" step="300" style="width:85px;">
+            <span class="mx-1">~</span>
+            <input type="time" id="new_clock_out_${date}" class="form-control form-control-sm" value="18:00" step="300" style="width:85px;">
+          </div>
+        `;
+        span.parentNode.replaceChild(container, span);
+
+        const clockInInput = document.getElementById(`new_clock_in_${date}`);
+        const clockOutInput = document.getElementById(`new_clock_out_${date}`);
+        clockInInput.focus();
+        const saveNewTimes = () => {
+          const newClockIn = clockInInput.value;
+          const newClockOut = clockOutInput.value;
+          if (newClockIn && newClockOut) {
+            // 出勤記録の登録
+            fetch("/api/saveWorkRecord", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                employee_id: employeeId,
+                target_date: date,
+                target_time: newClockIn,
+                target_type: "clock_in"
+              })
+            })
+            .then(response => {
+              if (!response.ok) {
+                throw new Error("出勤記録の登録に失敗しました");
+              }
+              return response.text();
+            })
+            .then(() => {
+              // 退勤記録の登録
+              return fetch("/api/saveWorkRecord", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  employee_id: employeeId,
+                  target_date: date,
+                  target_time: newClockOut,
+                  target_type: "clock_out"
+                })
+              });
+            })
+            .then(response => {
+              if (!response.ok) {
+                throw new Error("退勤記録の登録に失敗しました");
+              }
+              return response.text();
+            })
+            .then(() => {
+              fetchTimeRecords(); // 成功したら全体を更新
+            })
+            .catch(error => {
+              alert(error.message);
+              container.parentNode.replaceChild(span, container);
+            });
+          } else {
+            container.parentNode.replaceChild(span, container);
           }
+        };
+        
+        // blur イベントで保存
+        clockInInput.addEventListener("blur", saveNewTimes);
+        clockOutInput.addEventListener("blur", saveNewTimes);
+      } else if (type === "break_duration") {
+        // 休憩時間の編集処理
+        const input = document.createElement("input");
+        input.type = "number";
+        input.className = "form-control form-control-sm";
+        input.value = "60";
+        input.min = "0";
+        input.style.width = "85px";
+        span.parentNode.replaceChild(input, span);
+        input.focus();
+        
+        input.addEventListener("blur", function() {
+          const breakDuration = parseInt(input.value, 10);
+          
+          if (!isNaN(breakDuration) && breakDuration >= 0) {
+            // 休憩時間を保存
+            fetch("/api/saveWorkRecord", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                employee_id: employeeId,
+                target_date: date,
+                target_time: "00:00",
+                target_type: "break_duration",
+                break_duration: breakDuration
+              })
+            })
+            .then(response => {
+              if (!response.ok) {
+                throw new Error("休憩時間の保存に失敗しました");
+              }
+              return response.text();
+            })
+            .then(() => {
+              // 表示を更新して全体を再読み込み
+              fetchTimeRecords();
+            })
+            .catch(error => {
+              alert(error.message);
+              const newSpan = document.createElement("span");
+              newSpan.className = "editable-time";
+              newSpan.dataset.type = "break_duration";
+              newSpan.dataset.date = date;
+              newSpan.dataset.time = "00:00";
+              newSpan.dataset.employeeId = employeeId;
+              newSpan.style.minWidth = "50px";
+              newSpan.style.display = "inline-block";
+              newSpan.innerHTML = "&nbsp;";
+              input.parentNode.replaceChild(newSpan, input);
+              
+              // イベントリスナーを再設定
+              newSpan.addEventListener("click", arguments.callee.caller);
+            });
+          } else {
+            const newSpan = document.createElement("span");
+            newSpan.className = "editable-time";
+            newSpan.dataset.type = "break_duration";
+            newSpan.dataset.date = date;
+            newSpan.dataset.time = "00:00";
+            newSpan.dataset.employeeId = employeeId;
+            newSpan.style.minWidth = "50px";
+            newSpan.style.display = "inline-block";
+            newSpan.innerHTML = "&nbsp;";
+            input.parentNode.replaceChild(newSpan, input);
+            
+            // イベントリスナーを再設定
+            newSpan.addEventListener("click", arguments.callee.caller);
+          }
+        });
+        
+        input.addEventListener("keydown", function(e) {
+          if (e.key === "Enter") {
+            input.blur();
+          }
+        });
+      }
+    });
+  });
+  
+  return;
+}
           
           let groupedRecords = {};
           records.forEach(rec => {
