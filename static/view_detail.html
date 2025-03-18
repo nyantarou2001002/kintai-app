@@ -618,62 +618,81 @@
             tr.appendChild(tdBreakTime);
             
             // 有給休暇セル
-            const tdPaidVacation = document.createElement("td");
-            if (groupedRecords[dateStr] && groupedRecords[dateStr].hasPaidVacation) {
-              tdPaidVacation.innerHTML = `<i class="fa fa-check-square text-success"></i>`;
-            } else {
-              tdPaidVacation.innerHTML = `<i class="fa-regular fa-square"></i>`;
-            }
-            tdPaidVacation.style.cursor = "pointer";
-            tdPaidVacation.addEventListener("click", function() {
-              if (groupedRecords[dateStr]) {
-                deleteTimeRecord(groupedRecords[dateStr].employeeId, dateStr, "", "");
-                if (!groupedRecords[dateStr].hasPaidVacation) {
-                  const payload = {
-                    employee_id: currentEmployeeId,
-                    target_date: dateStr,
-                    target_time: "00:00",
-                    target_type: "paid_vacation"
-                  };
-                  fetch("/api/saveWorkRecord", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload)
-                  })
-                  .then(response => {
-                    if (!response.ok) {
-                      throw new Error("有給休暇記録の追加に失敗しました");
-                    }
-                    return response.text();
-                  })
-                  .then(() => { fetchTimeRecords(); })
-                  .catch(error => { alert(error.message); });
-                } else {
-                  fetchTimeRecords();
-                }
-              } else {
-                const payload = {
-                  employee_id: currentEmployeeId,
-                  target_date: dateStr,
-                  target_time: "00:00",
-                  target_type: "paid_vacation"
-                };
-                fetch("/api/saveWorkRecord", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(payload)
-                })
-                .then(response => {
-                  if (!response.ok) {
-                    throw new Error("有給休暇記録の追加に失敗しました");
-                  }
-                  return response.text();
-                })
-                .then(() => { fetchTimeRecords(); })
-                .catch(error => { alert(error.message); });
-              }
-            });
-            tr.appendChild(tdPaidVacation);
+const tdPaidVacation = document.createElement("td");
+if (groupedRecords[dateStr] && groupedRecords[dateStr].hasPaidVacation) {
+  tdPaidVacation.innerHTML = `<i class="fa fa-check-square text-success"></i>`;
+} else {
+  tdPaidVacation.innerHTML = `<i class="fa-regular fa-square"></i>`;
+}
+tdPaidVacation.style.cursor = "pointer";
+tdPaidVacation.addEventListener("click", function() {
+  if (groupedRecords[dateStr] && groupedRecords[dateStr].hasPaidVacation) {
+    // 有給休暇記録を削除して初期状態に戻す
+    deleteTimeRecord(groupedRecords[dateStr].employeeId, dateStr, "00:00", "paid_vacation", false);
+  } else {
+    // まず、この日の既存の出勤・退勤・休憩記録があれば削除
+    if (groupedRecords[dateStr]) {
+      // 削除確認は不要（有給休暇設定時は自動的に他の記録を削除）
+      const empId = groupedRecords[dateStr].employeeId;
+      
+      // 出勤・退勤記録の削除
+      if (groupedRecords[dateStr].workTimes && groupedRecords[dateStr].workTimes.length > 0) {
+        groupedRecords[dateStr].workTimes.forEach(workTime => {
+          fetch("/api/deleteTimeRecord", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              employee_id: empId,
+              target_date: dateStr,
+              target_time: workTime.time,
+              target_type: workTime.type
+            })
+          }).catch(error => console.error("削除エラー:", error));
+        });
+      }
+      
+      // 休憩時間の削除
+      if (groupedRecords[dateStr].breakTimes && groupedRecords[dateStr].breakTimes.length > 0) {
+        fetch("/api/deleteTimeRecord", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            employee_id: empId,
+            target_date: dateStr,
+            target_time: "00:00",
+            target_type: "break_duration"
+          })
+        }).catch(error => console.error("削除エラー:", error));
+      }
+    }
+    
+    // 有給休暇記録を追加
+    const payload = {
+      employee_id: currentEmployeeId,
+      target_date: dateStr,
+      target_time: "00:00",
+      target_type: "paid_vacation"
+    };
+    fetch("/api/saveWorkRecord", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error("有給休暇記録の追加に失敗しました");
+      }
+      return response.text();
+    })
+    .then(() => {
+      fetchTimeRecords(); // テーブル全体を更新
+    })
+    .catch(error => {
+      alert(error.message);
+    });
+  }
+});
+tr.appendChild(tdPaidVacation);
             
             // メモセル
             const tdMemo = document.createElement("td");
@@ -1018,35 +1037,41 @@
         });
     }
     
-    function deleteTimeRecord(employeeId, targetDate, targetTime, targetType) {
-      if (!confirm("このタイムレコーダー記録を削除してもよろしいですか？")) {
-        return;
-      }
-      const payload = {
-        employee_id: employeeId,
-        target_date: targetDate,
-        target_time: targetTime,
-        target_type: targetType
-      };
-      fetch("/api/deleteTimeRecord", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error("タイムレコーダー記録の削除に失敗しました");
-        }
-        return response.text();
-      })
-      .then(data => {
-        alert(data);
-        fetchTimeRecords();
-      })
-      .catch(error => {
-        alert(error.message);
-      });
+    function deleteTimeRecord(employeeId, targetDate, targetTime, targetType, showConfirm = true) {
+  if (showConfirm && !confirm("このタイムレコーダー記録を削除してもよろしいですか？")) {
+    return;
+  }
+  const payload = {
+    employee_id: employeeId,
+    target_date: targetDate,
+    target_time: targetTime,
+    target_type: targetType
+  };
+  fetch("/api/deleteTimeRecord", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error("タイムレコーダー記録の削除に失敗しました");
     }
+    return response.text();
+  })
+  .then(data => {
+    if (showConfirm) {
+      alert(data);
+    }
+    fetchTimeRecords();
+  })
+  .catch(error => {
+    if (showConfirm) {
+      alert(error.message);
+    } else {
+      console.error(error);
+    }
+  });
+}
     
     function handleUpdateEmployee(e) {
       e.preventDefault();
