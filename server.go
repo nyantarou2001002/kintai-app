@@ -254,7 +254,7 @@ func addJobTypeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte("Job Type added successfully!"))
+	w.Write([]byte("職種の追加に成功しました"))
 }
 
 // 従業員削除API

@@ -1,5 +1,6 @@
+<!-- Description: 管理画面のホーム画面 -->
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,70 +10,25 @@
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
       rel="stylesheet"
     />
+    <!-- Font Awesome -->
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css"
     />
-    <!-- カスタムスタイル -->
-    <style>
-      body {
-        background-color: #ffffff;
-        color: #1e64aa;
-      }
-      .container-custom {
-        background-color: #ebf3ff;
-        padding: 2rem;
-        border-radius: 8px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      }
-      .header-title {
-        font-size: 2rem;
-        font-weight: bold;
-        color: #1e64aa;
-      }
-      .section-title {
-        font-size: 1.5rem;
-        margin-bottom: 1rem;
-        color: #1e64aa;
-      }
-      /* テーブル */
-      .table thead {
-        background-color: #285ac8;
-        color: #ffffff;
-      }
-      .table-striped tbody tr:nth-of-type(odd) {
-        background-color: #ffffff;
-      }
-      .table-striped tbody tr:nth-of-type(even) {
-        background-color: #ebf3ff;
-      }
-      /* ボタン */
-      .btn-primary {
-        background-color: #285ac8;
-        border-color: #285ac8;
-      }
-      .btn-primary:hover {
-        background-color: #2864f0;
-        border-color: #2864f0;
-      }
-      .btn-danger:hover {
-        opacity: 0.8;
-      }
-    </style>
+    <!-- 共通スタイル -->
+    <link href="css/style.css" rel="stylesheet">
+    <!-- 管理画面スタイル -->
+    <link href="css/view_home.css" rel="stylesheet">
   </head>
-  <body>
-    <div class="container container-custom my-4">
+  <body class="bg-light">
+    <div class="container bg-white p-4 rounded shadow my-4">
       <!-- ヘッダー -->
       <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <span class="header-title">管理者画面</span>
+          <span class="header-title text-primary">管理者画面</span>
         </div>
         <div>
-          <!-- kintai_home.htmlに戻るボタンを左側に追加 -->
-
-          <a href="view_report.html" class="btn btn-primary"
-            >月次勤怠レポートを見る</a
-          >
+          <a href="view_report.html" class="btn btn-primary">月次勤怠レポートを見る</a>
           <a href="index.html" class="btn btn-secondary me-2">打刻画面に戻る</a>
           <a href="view_zz.html" class="btn btn-secondary me-2">退職者一覧へ</a>
           <a href="view_zy.html" class="btn btn-secondary me-2">過去の情報一覧へ</a>
@@ -81,15 +37,14 @@
 
       <!-- 従業員一覧 -->
       <div class="mb-4">
-        <h3>従業員一覧</h3>
+        <h3 class="text-primary">従業員一覧</h3>
         <table class="table table-striped">
-          <thead>
+          <thead class="bg-primary text-white">
             <tr>
               <th>従業員番号</th>
               <th>名前</th>
               <th>職種</th>
               <th>職種コード</th>
-              
               <th>操作</th>
             </tr>
           </thead>
@@ -98,9 +53,10 @@
           </tbody>
         </table>
       </div>
-      <!-- 打刻不整合一覧セクションを追加 -->
+      
+      <!-- 打刻不整合一覧 -->
       <div class="mb-4">
-        <h3>打刻不整合一覧</h3>
+        <h3 class="text-primary">打刻不整合一覧</h3>
         <table class="table table-striped">
           <thead class="table-dark">
             <tr>
@@ -115,9 +71,10 @@
           </tbody>
         </table>
       </div>
+      
       <!-- 新しい従業員を追加 -->
       <div class="mb-4">
-        <h3>新しい従業員を追加</h3>
+        <h3 class="text-primary">新しい従業員を追加</h3>
         <form id="addEmployeeForm" onsubmit="handleAddEmployee(event)">
           <div class="mb-3">
             <label for="employee_name" class="form-label">従業員名:</label>
@@ -129,7 +86,7 @@
               <option value="">-- 職種を選択してください --</option>
             </select>
           </div>
-          <!-- 追加：雇用形態 -->
+          <!-- 雇用形態 -->
           <div class="mb-3">
             <label class="form-label">雇用形態:</label>
             <div>
@@ -143,7 +100,7 @@
               </div>
             </div>
           </div>
-          <!-- 追加：パートの場合のみ表示する時給と交通費入力 -->
+          <!-- パート用フィールド -->
           <div class="mb-3" id="parttimeFields" style="display: none;">
             <div class="mb-3">
               <label for="hourly_wage" class="form-label">時給 (円):</label>
@@ -171,8 +128,9 @@
         <div id="employee_add_message" class="mt-2"></div>
       </div>
       
+      <!-- 新しい職種を追加 -->
       <div class="mb-4">
-        <h3>新しい職種を追加</h3>
+        <h3 class="text-primary">新しい職種を追加</h3>
         <form id="addJobTypeForm" onsubmit="handleAddJobType(event)">
           <div class="mb-3">
             <label for="job_type_code" class="form-label">職種コード (2文字大文字):</label>
@@ -187,8 +145,9 @@
         <div id="jobtype_add_message" class="mt-2"></div>
       </div>
   
+      <!-- 職種一覧 -->
       <div class="mb-4">
-        <h3>職種一覧</h3>
+        <h3 class="text-primary">職種一覧</h3>
         <table class="table table-striped">
           <thead class="table-dark">
             <tr>
@@ -202,9 +161,10 @@
           </tbody>
         </table>
       </div>
+      
+      <!-- パスワード再設定 -->
       <div class="mb-4">
-        <h3>パスワードの再設定</h3>
-        <!-- 現在のメールアドレスを保持（非表示） -->
+        <h3 class="text-primary">パスワードの再設定</h3>
         <input type="hidden" id="owner_email_hidden" />
         <form id="ownerForm" onsubmit="return handleSetOwner(event)">
           <div class="mb-3">
@@ -221,396 +181,9 @@
       </div>
     </div>
   
-    <script>
-
-      
-function fetchEmployees() {
-  fetch('/api/employees')
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('サーバーエラー: ' + response.status);
-      }
-      return response.json();
-    })
-    .then(data => {
-      const tableBody = document.getElementById("employeeTableBody");
-      tableBody.innerHTML = ""; // 既存データをクリア
-
-      data.forEach(emp => {
-        // ★追加★ 従業員番号が "ZZ" で始まる場合はスキップする
-        if (emp.employee_number.startsWith("ZZ")) {
-          return; // この従業員は view_home には表示せず、view_zz.html で表示します
-        }
-        if(emp.employee_number.startsWith("ZY")){
-          return;
-        }
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td><a href="view_detail.html?empNumber=${emp.employee_number}">${emp.employee_number}</a></td>
-          <td>${emp.name}</td>
-          <td>${emp.job}</td>
-          <td>${emp.job_code}</td>
-          <td>
-            <button class="btn btn-danger btn-sm" onclick="handleDeleteEmployee('${emp.employee_number}')">
-              削除
-            </button>
-          </td>
-        `;
-        tableBody.appendChild(row);
-      });
-    })
-    .catch(error => console.error('従業員取得エラー:', error));
-}
-
-
-      function handleDeleteEmployee(employeeNumber) {
-        if (!confirm(`従業員番号 ${employeeNumber} を削除しますか？`)) {
-          return;
-        }
-
-        fetch(`/api/deleteEmployee`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ employee_number: employeeNumber })
-        })
-        .then(response => response.text())
-        .then(data => {
-          alert(data);
-          fetchEmployees(); // 削除後にリスト更新
-        })
-        .catch(error => console.error('削除エラー:', error));
-      }
-  
-      // ページ読み込み時に従業員一覧を取得
-      fetchEmployees();
-    </script>
-
-    
-
-    <script>
-      // 不整合一覧の取得
-      // 不整合一覧の取得
-      function fetchInconsistencies() {
-        fetch('/api/inconsistencies')
-          .then(response => {
-            if (!response.ok) {
-              throw new Error("不整合一覧の取得に失敗しました");
-            }
-            return response.json();
-          })
-          .then(data => {
-            const tbody = document.getElementById("inconsistenciesTableBody");
-            tbody.innerHTML = "";
-            if (!data || data.length === 0) {
-              tbody.innerHTML = `<tr><td colspan="4" class="text-center">不整合な打刻はありません</td></tr>`;
-            } else {
-              // 従業員番号で昇順にソートする
-              data.sort((a, b) => {
-                if (a.employee_number < b.employee_number) return -1;
-                if (a.employee_number > b.employee_number) return 1;
-                return 0;
-              });
-              data.forEach(item => {
-                // "T"以降を取り除いて日付部分のみを表示
-                const dateOnly = item.date.split("T")[0];
-                const tr = document.createElement("tr");
-                tr.innerHTML = `
-                  <td>${item.employee_number}</td>
-                  <td>${item.employee_name}</td>
-                  <td>${dateOnly}</td>
-                  <td>${item.issues.join(", ")}</td>
-                `;
-                tbody.appendChild(tr);
-              });
-            }
-          })
-          .catch(error => {
-            document.getElementById("inconsistenciesTableBody").innerHTML = `<tr><td colspan="4" class="text-center">エラーが発生しました: ${error.message}</td></tr>`;
-          });
-      }
-
-      // 新規従業員追加フォーム用：職種セレクトボックスにオプションを設定する関数
-      function populateEmployeeJobSelect() {
-        fetch('/api/jobTypes')
-          .then(response => {
-            if (!response.ok) {
-              throw new Error('職種一覧の取得に失敗しました');
-            }
-            return response.json();
-          })
-          .then(data => {
-            const select = document.getElementById('employee_job');
-            // 既存のオプションをクリアし、初期オプションを設定
-            select.innerHTML = '<option value="">-- 職種を選択してください --</option>';
-            data.forEach(job => {
-              const option = document.createElement('option');
-              // ここではjob.nameを値として設定していますが、必要に応じてjob.codeに変更できます
-              option.value = job.name;
-              option.textContent = `${job.name} (${job.code})`;
-              select.appendChild(option);
-            });
-          })
-          .catch(error => {
-            console.error('職種取得エラー:', error);
-          });
-      }
-
-
-
-      // ページ読み込み時および必要に応じて不整合一覧を取得
-      window.addEventListener("load", function() {
-        fetchEmployees();
-        fetchInconsistencies();
-        populateEmployeeJobSelect();
-      });
-    </script>
-
-
-    
-
-    <script>
-      // 雇用形態の変更時に、パートの場合のみ「時給」と「交通費」入力欄を表示
-      document.querySelectorAll('input[name="employment_type"]').forEach(radio => {
-        radio.addEventListener('change', function() {
-          const parttimeFields = document.getElementById('parttimeFields');
-          if (this.value === 'パート') {
-            parttimeFields.style.display = 'block';
-          } else {
-            parttimeFields.style.display = 'none';
-          }
-        });
-      });
-
-      function handleAddEmployee(event) {
-        event.preventDefault();
-        const record = {
-          name: document.getElementById("employee_name").value,
-          job: document.getElementById("employee_job").value,
-          max_attendance_count: 20,
-          paid_vacation_limit: parseInt(document.getElementById("paid_vacation_limit").value, 10),
-          paid_vacation_grant_date: (function() {
-            const joiningDateStr = document.getElementById("paid_vacation_grant_date").value;
-            const joiningDate = new Date(joiningDateStr);
-            joiningDate.setMonth(joiningDate.getMonth() + 6);
-            return joiningDate.toISOString().split("T")[0];
-          })(),
-          employment_type: document.querySelector('input[name="employment_type"]:checked').value,
-          hourly_wage: 0,
-          transportation_expense: 0
-        };
-        if (record.employment_type === "パート") {
-          record.hourly_wage = parseInt(document.getElementById("hourly_wage").value, 10) || 0;
-          record.transportation_expense = parseInt(document.getElementById("transportation_expense").value, 10) || 0;
-        }
-        fetch('/api/addEmployee', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(record)
-        })
-          .then(response => {
-            if (!response.ok) {
-              return response.text().then(text => { throw new Error(text); });
-            }
-            return response.json();
-          })
-          .then(data => {
-            alert('従業員を追加しました: ' + data.employee_number + ' ' + data.name);
-            fetchEmployees();
-          })
-          .catch(error => {
-            alert('エラー: ' + error.message);
-          });
-      }
-    </script>
-
-
-
-    
-
-    <script>
-      function fetchJobTypes() {
-  fetch('/api/jobTypes')
-    .then(response => response.json())
-    .then(data => {
-      // 職種一覧テーブルの更新
-      const tableBody = document.getElementById("jobTypeTableBody");
-      tableBody.innerHTML = ""; // 既存データをクリア
-
-      data.forEach(job => {
-        const row = document.createElement("tr");
-        // 職種名部分を span でラップし、data-code属性に職種コードを保持
-        row.innerHTML = `
-          <td>${job.code}</td>
-          <td><span class="editable-job-name" data-code="${job.code}">${job.name}</span></td>
-          <td>
-            <button class="btn btn-danger btn-sm" onclick="handleDeleteJobType('${job.code}')">
-              削除
-            </button>
-          </td>
-        `;
-        tableBody.appendChild(row);
-      });
-
-      // span要素に編集イベントを付与
-  document.querySelectorAll('.editable-job-name').forEach(span => {
-    span.addEventListener('click', function() {
-      // 既にinputが存在していなければ編集モードにする
-      if (this.querySelector('input')) return;
-      const currentName = this.innerText;
-      const code = this.dataset.code;
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.value = currentName;
-      input.className = 'form-control';
-      input.style.width = '80%';
-
-      // 入力完了（Enterキーまたはblur）時に更新
-      function finishEditing() {
-        const newName = input.value.trim();
-        if (newName && newName !== currentName) {
-          // デバッグ用ログ
-          console.log("Sending update request:", { code: code, name: newName });
-          // APIに更新リクエストを送信
-          fetch('/api/updateJobType', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code: code, name: newName })
-          })
-          .then(response => {
-            console.log("Response status:", response.status);
-            if (!response.ok) {
-              throw new Error('更新に失敗しました');
-            }
-            return response.json();
-          })
-          .then(data => {
-            console.log("Update response data:", data);
-            span.innerText = data.name;
-          })
-          .catch(error => {
-            console.error("Error during update:", error);
-            alert(error.message);
-            span.innerText = currentName;
-          });
-        } else {
-          span.innerText = currentName;
-        }
-      }
-
-      input.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-          finishEditing();
-        }
-      });
-      input.addEventListener('blur', finishEditing);
-
-      // spanの中身をinputに置換
-      span.innerHTML = '';
-      span.appendChild(input);
-      input.focus();
-    });
-  });
-    })
-    .catch(error => console.error('職種取得エラー:', error));
-}
-
-
-      function handleDeleteJobType(jobCode) {
-        if (!confirm(`職種コード ${jobCode} を削除しますか？`)) {
-          return;
-        }
-
-        fetch(`/api/deleteJobType`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: jobCode })
-        })
-        .then(response => response.text())
-        .then(data => {
-          alert(data);
-          fetchJobTypes(); // 削除後にリスト更新
-        })
-        .catch(error => console.error('削除エラー:', error));
-      }
-
-      function handleAddJobType(event) {
-        event.preventDefault();
-
-        const record = {
-          code: document.getElementById("job_type_code").value.trim(),
-          name: document.getElementById("job_type_name").value.trim()
-        };
-
-        fetch('/api/addJobType', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(record)
-        })
-        .then(response => response.text())
-        .then(data => {
-          alert(data);
-          fetchJobTypes(); // 更新
-        })
-        .catch(error => console.error('エラー:', error));
-      }
-
-      // ページ読み込み時に職種一覧を取得
-      fetchJobTypes();
-    </script>
-
-
-    <script>
-      // ページ読み込み時に、所有者情報を取得してhiddenフィールドにセット
-      window.addEventListener('DOMContentLoaded', () => {
-        fetch('/api/getOwner')
-          .then(response => response.json())
-          .then(data => {
-            // 例として、既存のメールアドレスを hidden フィールドにセット
-            document.getElementById("owner_email_hidden").value = data.email || "";
-          })
-          .catch(error => console.error('オーナー情報取得エラー:', error));
-      });
-
-      function handleSetOwner(event) {
-        event.preventDefault();
-        const newPassword = document.getElementById("new_password").value;
-        const confirmPassword = document.getElementById("confirm_password").value;
-        if (newPassword !== confirmPassword) {
-          alert("新しいパスワードが一致しません。");
-          return false;
-        }
-        // hidden フィールドから既存のメールアドレスを取得
-        const email = document.getElementById("owner_email_hidden").value;
-        const payload = {
-          email: email,
-          password: newPassword
-        };
-
-        fetch('/api/setOwner', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        })
-          .then(response => {
-            if (!response.ok) {
-              throw new Error('サーバーエラー: ' + response.status);
-            }
-            return response.text();
-          })
-          .then(data => {
-            document.getElementById("owner_message").innerText = data;
-          })
-          .catch(error => console.error('オーナー設定エラー:', error));
-        return false;
-      }
-
-    </script>
-          
-
-
-
     <!-- Bootstrap 5 JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"></script>
-
-   </body>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- カスタムJS -->
+    <script src="js/view_home.js"></script>
+  </body>
 </html>

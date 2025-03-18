@@ -1,0 +1,37 @@
+
+  /* 管理画面用スタイル */
+  .header-title {
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--bs-primary);
+  }
+  
+  .section-title {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    color: var(--bs-primary);
+  }
+  
+  /* テーブル */
+  .table thead {
+    background-color: var(--bs-primary);
+    color: #ffffff;
+  }
+  
+  .table-striped tbody tr:nth-of-type(odd) {
+    background-color: #ffffff;
+  }
+  
+  .table-striped tbody tr:nth-of-type(even) {
+    background-color: #ebf3ff;
+  }
+  
+  /* 編集可能な職種名 */
+  .editable-job-name {
+    cursor: pointer;
+  }
+  
+  .editable-job-name:hover {
+    text-decoration: underline;
+    color: var(--bs-primary);
+  }
