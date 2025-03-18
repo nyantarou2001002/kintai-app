@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -6,94 +7,171 @@
   <title>勤怠管理システム</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    /* freeeのブルー */
-    :root {
-      --freee-blue: #00A3E0;
-      --freee-light-blue: #E6F7FE;
-      --freee-gray: #F4F4F4;
-    }
-
     body {
-        background-color: #f0f8ff;
-        color: #1e64aa;
-      }
-
+      background-color: #f0f8ff;
+      color: #1e64aa;
+    }
     .container-custom {
-      background: white;
-      border-radius: 10px;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-      padding: 30px;
+      background-color: #ebf3ff;
+      padding: 2rem;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      max-width: 500px;
+      margin-top: 50px;
     }
-
     .header-title {
-        color: #1e64aa;
-      }
-
-    .btn-primary {
-      background-color: var(--freee-blue);
-      border: none;
-    }
-
-    .btn-primary:hover {
-      background-color: #008BCB;
-    }
-
-    .form-select, .form-control {
-      border: 2px solid var(--freee-blue);
-    }
-
-    h1 {
-      color: var(--freee-blue);
+      font-size: 2rem;
       font-weight: bold;
+      color: #1e64aa;
     }
-
+    .btn-primary {
+      background-color: #285ac8;
+      border-color: #285ac8;
+    }
+    .btn-primary:hover {
+      background-color: #2864f0;
+      border-color: #2864f0;
+    }
+    /* その他のボタンの色も統一 */
+    .btn-success {
+      background-color: #28a745;
+      border-color: #28a745;
+    }
+    .btn-success:hover {
+      background-color: #218838;
+      border-color: #1e7e34;
+    }
+    .btn-warning {
+      background-color: #ffc107;
+      border-color: #ffc107;
+      color: #212529;
+    }
+    .btn-warning:hover {
+      background-color: #e0a800;
+      border-color: #d39e00;
+      color: #212529;
+    }
+    .btn-info {
+      background-color: #17a2b8;
+      border-color: #17a2b8;
+      color: white;
+    }
+    .btn-info:hover {
+      background-color: #138496;
+      border-color: #117a8b;
+      color: white;
+    }
+    /* フォーム要素のスタイリング */
+    .form-select, .form-control {
+      border: 1px solid #ced4da;
+    }
+    .form-select:focus, .form-control:focus {
+      border-color: #285ac8;
+      box-shadow: 0 0 0 0.25rem rgba(40, 90, 200, 0.25);
+    }
+    /* ボタンサイズの統一 */
     .btn-custom {
-      width: 100px;
+      min-width: 100px;
+    }
+    .section-title {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+      color: #1e64aa;
+    }
+    /* エラーメッセージ表示用 */
+    .alert {
+      margin-top: 1rem;
+      display: none;
     }
   </style>
 </head>
 <body>
-  <div class="container mt-5">
-    <div class="container-custom bg-light p-4 rounded shadow">
-      <h1 class="text-center header-title">勤怠管理システム</h1>
-      <p class="text-center text-muted">従業員を選択し、打刻を行ってください。</p>
+  <div class="container container-custom bg-light p-4 rounded shadow">
+    <div class="text-center mb-4">
+      <h1 class="header-title">勤怠管理システム</h1>
+      <p>従業員を選択し、打刻を行ってください。</p>
+    </div>
       
-      <div class="text-center mb-4">
-        <a class="btn btn-primary btn-lg" href="login.html">管理者画面へ</a>
-      </div>
+    <div class="text-center mb-4">
+      <a class="btn btn-primary" href="login.html">管理者画面へ</a>
+    </div>
 
-      <div class="mb-4">
-        <label for="employeeSelect" class="form-label">従業員を選択:</label>
-        <select id="employeeSelect" class="form-select">
-          <option value="">-- 従業員を選択してください --</option>
-        </select>
-      </div>
+    <div class="mb-4">
+      <label for="employeeSelect" class="form-label">従業員を選択:</label>
+      <select id="employeeSelect" class="form-select">
+        <option value="">-- 従業員を選択してください --</option>
+      </select>
+    </div>
 
-      <div class="text-center mb-4">
-        <button class="btn btn-success btn-custom" onclick="recordImmediate('clock_in')">出勤</button>
-        <button class="btn btn-warning btn-custom" onclick="recordImmediate('clock_out')">退勤</button>
-      </div>
+    <div class="text-center mb-4">
+      <button class="btn btn-success btn-custom mx-2" onclick="recordImmediate('clock_in')">出勤</button>
+      <button class="btn btn-warning btn-custom mx-2" onclick="recordImmediate('clock_out')">退勤</button>
+    </div>
 
-      <!-- 休憩時間入力欄と休憩登録ボタンを追加 -->
-      <div class="text-center mb-4">
-        <input type="number" id="breakDurationInput" class="form-control d-inline-block" style="width:150px;" placeholder="休憩時間（分）">
+    <!-- 休憩時間入力欄と休憩登録ボタンを追加 -->
+    <div class="text-center mb-4">
+      <div class="input-group justify-content-center">
+        <input type="number" id="breakDurationInput" class="form-control" style="max-width:200px;" 
+               placeholder="休憩時間（分）" min="1" value="30">
         <button class="btn btn-info btn-custom" onclick="recordImmediate('break_duration')">休憩登録</button>
       </div>
-
-      <div class="mb-4 ">
-        <h2 class="text-center header-title">有給休暇登録</h3>
-        <form onsubmit="return handlePaidVacationSubmit(this)" class="text-center">
-          <div class="d-flex justify-content-center">
-            <input type="date" name="target_date" class="form-control w-50 me-2" required>
-            <button type="submit" class="btn btn-primary">登録</button>
-          </div>
-        </form>
-      </div>
     </div>
+
+    <div class="mb-4">
+      <div class="text-center mb-2">
+        <h3 class="section-title">有給休暇登録</h3>
+      </div>
+      <form id="paidVacationForm" onsubmit="return handlePaidVacationSubmit(this)" class="text-center">
+        <div class="d-flex justify-content-center">
+          <input type="date" name="target_date" class="form-control me-2" style="max-width:200px;" required>
+          <button type="submit" class="btn btn-primary btn-custom">登録</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- アラートメッセージ表示エリア -->
+    <div id="alertArea" class="alert" role="alert"></div>
   </div>
 
   <script>
+    // 従業員データを格納するグローバル変数
+    let employeeData = [];
+    
+    // ページ読み込み時の初期化
+    document.addEventListener('DOMContentLoaded', function() {
+      fetchEmployees();
+      
+      // 現在の日付をセット
+      const today = new Date();
+      const dateField = document.querySelector('input[name="target_date"]');
+      dateField.value = today.toISOString().split('T')[0];
+      
+      // 休憩時間の入力制限
+      const breakInput = document.getElementById('breakDurationInput');
+      breakInput.addEventListener('input', function() {
+        const value = parseInt(this.value);
+        if (isNaN(value) || value < 1) {
+          this.value = 1;
+        }
+      });
+    });
+
+    // アラート表示関数
+    function showAlert(message, type = 'info') {
+      const alertArea = document.getElementById('alertArea');
+      alertArea.textContent = message;
+      alertArea.className = `alert alert-${type}`;
+      alertArea.style.display = 'block';
+      
+      // 5秒後に自動的に消す
+      setTimeout(() => {
+        alertArea.style.display = 'none';
+      }, 5000);
+    }
+
     function fetchEmployees() {
+      showAlert("従業員情報を読み込み中...", "info");
+      
       fetch('/api/employees')
         .then(response => {
           if (!response.ok) {
@@ -102,19 +180,55 @@
           return response.json();
         })
         .then(data => {
+          // グローバル変数に保存
+          employeeData = data;
+          console.log("従業員データ:", employeeData);
+          
           const select = document.getElementById("employeeSelect");
           select.innerHTML = '<option value="">-- 従業員を選択してください --</option>';
-          data.forEach(emp => {
+          
+          // ZZやZYで始まる社員番号の人は表示しない
+          const filteredData = data.filter(emp => 
+            !emp.employee_number.startsWith('ZZ') && 
+            !emp.employee_number.startsWith('ZY')
+          );
+          
+          if (filteredData.length === 0) {
+            showAlert("表示可能な従業員がいません", "warning");
+            return;
+          }
+          
+          // サーバーからのデータで重要なフィールドを確認 (デバッグ用)
+          if (filteredData.length > 0) {
+            const firstEmp = filteredData[0];
+            console.log("従業員データ例:", JSON.stringify(firstEmp));
+            console.log("ID存在確認:", firstEmp.hasOwnProperty('id'));
+          }
+
+          // ここで実際の従業員リストを作成
+          filteredData.forEach(emp => {
             const option = document.createElement("option");
-            option.value = emp.id;
+            
+            // IDが存在するならそれを使い、存在しなければ自分で見つける必要がある
+            if (emp.id) {
+              option.value = emp.id;
+              option.dataset.employeeNumber = emp.employee_number;
+            } else {
+              option.value = emp.employee_number;
+              option.dataset.employeeNumber = emp.employee_number;
+            }
+            
             option.text = `${emp.name} (${emp.job})`;
             select.add(option);
           });
+          
+          showAlert('従業員情報の読み込みが完了しました', 'success');
         })
-        .catch(error => console.error('従業員取得エラー:', error));
+        .catch(error => {
+          console.error('従業員取得エラー:', error);
+          showAlert('従業員情報の取得に失敗しました: ' + error.message, 'danger');
+        });
     }
-
-    fetchEmployees();
 
     function getJapanDateString() {
       const now = new Date();
@@ -125,78 +239,199 @@
       return `${year}-${month}-${day}`; // YYYY-MM-DD 形式
     }
 
+    // タイムレコーダーの記録を保存する関数
     function recordImmediate(type) {
-      const empSelect = document.getElementById("employeeSelect");
-      if (empSelect.value === "") {
-        alert("従業員を選択してください");
+      // 従業員が選択されているか確認
+      const select = document.getElementById("employeeSelect");
+      const selectedValue = select.value;
+      if (!selectedValue) {
+        showAlert("従業員を選択してください", "warning");
         return;
       }
-
+      
+      // 選択した従業員の詳細情報を取得
+      const selectedOption = select.options[select.selectedIndex];
+      const employeeNumber = selectedOption.dataset.employeeNumber;
+      
+      // ここからは従業員IDを使用
       const now = new Date();
       const target_date = getJapanDateString(); // YYYY-MM-DD 形式
       const target_time = now.toTimeString().slice(0, 5); // HH:MM 形式
 
-      const record = {
-        employee_id: parseInt(empSelect.value, 10),
-        target_date: target_date,
-        target_time: target_time,
-        target_type: type
-      };
+      // 従業員詳細APIを呼び出して、正確なIDを取得
+      showAlert("従業員情報を取得中...", "info");
 
-      // 休憩時間登録の場合、入力値をペイロードに追加
-      if (type === 'break_duration') {
-        const breakDurationValue = document.getElementById("breakDurationInput").value;
-        const breakDuration = parseInt(breakDurationValue, 10);
-        if (isNaN(breakDuration)) {
-          alert("休憩時間を正しく入力してください");
-          return;
-        }
-        record.break_duration = breakDuration;
-      }
+      fetch(`/api/employeeDetail?empNumber=${employeeNumber}`)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error("従業員詳細を取得できませんでした");
+          }
+          return response.json();
+        })
+        .then(employeeDetail => {
+          console.log("従業員詳細:", employeeDetail);
+          
+          // ここで取得した正確なIDを使用してレコードを作成
+          const record = {
+            employee_id: employeeDetail.id,
+            target_date: target_date,
+            target_time: target_time,
+            target_type: type
+          };
 
-      fetch('/api/saveWorkRecord', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(record)
-      })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('サーバーエラー: ' + response.status);
-        }
-        return response.text();
-      })
-      .then(data => alert(data))
-      .catch(error => console.error('エラー:', error));
+          // 休憩時間登録の場合、入力値をペイロードに追加
+          if (type === 'break_duration') {
+            const breakInput = document.getElementById("breakDurationInput");
+            const breakDuration = parseInt(breakInput.value);
+            if (isNaN(breakDuration) || breakDuration < 1) {
+              showAlert("休憩時間は1分以上の値を入力してください", "warning");
+              return;
+            }
+            record.break_duration = breakDuration;
+          }
+
+          // 処理中メッセージ
+          let actionText = '';
+          switch(type) {
+            case 'clock_in': actionText = '出勤'; break;
+            case 'clock_out': actionText = '退勤'; break;
+            case 'break_duration': actionText = '休憩時間'; break;
+            default: actionText = '記録'; break;
+          }
+          
+          showAlert(`${actionText}の記録を処理中...`, "info");
+
+          console.log("サーバーに送信するデータ:", record);
+
+          return fetch('/api/saveWorkRecord', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(record)
+          })
+          .then(response => {
+            console.log("サーバーからのレスポンス:", response.status);
+            
+            if (!response.ok) {
+              // エラーレスポンスの場合はテキスト内容も取得
+              return response.text().then(text => { 
+                console.log("エラーレスポンス:", text);
+                throw new Error(text || `サーバーエラー: ${response.status}`); 
+              });
+            }
+            return response.text();
+          })
+          .then(data => {
+            console.log("成功レスポンス:", data);
+            
+            // 成功時のメッセージを操作タイプに応じて変更
+            let successMessage;
+            switch(type) {
+              case 'clock_in':
+                successMessage = "出勤の打刻に成功しました";
+                break;
+              case 'clock_out':
+                successMessage = "退勤の打刻に成功しました";
+                break;
+              case 'break_duration':
+                successMessage = "休憩時間の登録に成功しました";
+                break;
+              default:
+                successMessage = data || "記録に成功しました";
+            }
+            showAlert(successMessage, "success");
+            
+            // 休憩時間入力欄を元の値に戻す
+            if(type === 'break_duration') {
+              document.getElementById("breakDurationInput").value = "30";
+            }
+          });
+        })
+        .catch(error => {
+          console.error('API呼び出しエラー:', error);
+          
+          // エラーメッセージの整形
+          let errorMsg = error.message;
+          if (typeof errorMsg === 'string' && errorMsg.length > 100) {
+            // 長すぎるエラーメッセージは切り詰める
+            errorMsg = errorMsg.substring(0, 100) + "...";
+          }
+          
+          showAlert(`操作に失敗しました: ${errorMsg}`, "danger");
+        });
     }
-
-
+    
+    // 有給休暇の登録処理
     function handlePaidVacationSubmit(formObject) {
-      const empSelect = document.getElementById("employeeSelect");
-      if (empSelect.value === "") {
-        alert("従業員を選択してください");
+      // 従業員が選択されているか確認
+      const select = document.getElementById("employeeSelect");
+      const selectedValue = select.value;
+      if (!selectedValue) {
+        showAlert("従業員を選択してください", "warning");
         return false;
       }
+      
+      // 選択した従業員の詳細情報を取得
+      const selectedOption = select.options[select.selectedIndex];
+      const employeeNumber = selectedOption.dataset.employeeNumber;
+      
+      // 従業員詳細APIを呼び出して、正確なIDを取得
+      showAlert("有給休暇の登録を処理中...", "info");
 
-      const record = {
-        employee_id: parseInt(empSelect.value, 10),
-        target_date: formObject.target_date.value,
-        target_time: "00:00",
-        target_type: "paid_vacation"
-      };
+      fetch(`/api/employeeDetail?empNumber=${employeeNumber}`)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error("従業員詳細を取得できませんでした");
+          }
+          return response.json();
+        })
+        .then(employeeDetail => {
+          console.log("従業員詳細 (有給):", employeeDetail);
+          
+          const record = {
+            employee_id: employeeDetail.id,
+            target_date: formObject.target_date.value,
+            target_time: "00:00",
+            target_type: "paid_vacation"
+          };
 
-      fetch('/api/saveWorkRecord', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(record)
-      })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('サーバーエラー: ' + response.status);
-        }
-        return response.text();
-      })
-      .then(data => alert(data))
-      .catch(error => console.error('エラー:', error));
+          console.log("サーバーに送信するデータ (有給):", record);
+
+          return fetch('/api/saveWorkRecord', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(record)
+          })
+          .then(response => {
+            console.log("サーバーからのレスポンス (有給):", response.status);
+            
+            if (!response.ok) {
+              // エラーレスポンスの場合はテキスト内容も取得
+              return response.text().then(text => { 
+                console.log("有給エラーレスポンス:", text);
+                throw new Error(text || `サーバーエラー: ${response.status}`); 
+              });
+            }
+            return response.text();
+          })
+          .then(data => {
+            console.log("有給成功レスポンス:", data);
+            showAlert("有給休暇の登録に成功しました", "success");
+          });
+        })
+        .catch(error => {
+          console.error('有給API呼び出しエラー:', error);
+          
+          // エラーメッセージの確認
+          const errorMsg = error.message;
+          if (errorMsg.includes("有給休暇") || 
+              errorMsg.includes("使用できる") || 
+              errorMsg.includes("available") || 
+              errorMsg.includes("insufficient")) {
+            showAlert("取得可能な有給休暇日数がありません。", "warning");
+          } else {
+            showAlert(`有給休暇登録エラー: ${errorMsg}`, "danger");
+          }
+        });
 
       return false;
     }
