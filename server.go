@@ -106,11 +106,11 @@ func employeesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := db.Query(`
-    SELECT e.employee_number, e.name, e.job, e.job_code, e.max_attendance_count, 
+    SELECT e.id, e.employee_number, e.name, e.job, e.job_code, e.max_attendance_count, 
            e.paid_vacation_limit, e.paid_vacation_grant_date, e.employment_type
     FROM employees e
     JOIN job_types j ON e.job_code = j.code
-	`)
+`)
 
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
@@ -121,7 +121,7 @@ func employeesHandler(w http.ResponseWriter, r *http.Request) {
 	var employees []Employee
 	for rows.Next() {
 		var emp Employee
-		if err := rows.Scan(&emp.EmployeeNumber, &emp.Name, &emp.Job, &emp.JobCode,
+		if err := rows.Scan(&emp.ID, &emp.EmployeeNumber, &emp.Name, &emp.Job, &emp.JobCode,
 			&emp.MaxAttendanceCount, &emp.PaidVacationLimit, &emp.PaidVacationGrantDate, &emp.EmploymentType); err != nil {
 			http.Error(w, "Database error", http.StatusInternalServerError)
 			log.Println("Scan Error:", err)
@@ -1320,11 +1320,28 @@ func updateWorkRecordHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Received update request: %+v\n", req)
 
+	// もし TargetType が "_new" で終わるなら、更新ではなくINSERTを行う
+	if strings.HasSuffix(req.TargetType, "_new") {
+		req.TargetType = strings.TrimSuffix(req.TargetType, "_new")
+		// INSERTで新規レコード追加
+		query := "INSERT INTO work_records (employee_id, target_date, target_time, target_type) VALUES (?, ?, ?, ?)"
+		_, err := db.Exec(query, req.EmployeeID, req.NewTargetDate, req.NewTargetTime, req.TargetType)
+		if err != nil {
+			log.Println("Database error during insert:", err)
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte("タイムレコーダー記録を追加しました"))
+		return
+	}
+
+	// それ以外は通常の更新処理
 	var query string
 	var args []interface{}
 
 	if req.TargetType == "break_duration" {
-		// もし新しい値が空文字の場合は削除処理を行う
+		// break_durationの場合の処理はそのまま
 		if strings.TrimSpace(req.NewTargetTime) == "" {
 			delQuery := "DELETE FROM work_records WHERE employee_id = ? AND target_date = ? AND target_type = 'break_duration'"
 			_, err := db.Exec(delQuery, req.EmployeeID, req.OldTargetDate)
@@ -1340,7 +1357,6 @@ func updateWorkRecordHandler(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "Invalid break duration", http.StatusBadRequest)
 				return
 			}
-			// まず、対象レコードが存在するかチェックする
 			var count int
 			err = db.QueryRow("SELECT COUNT(*) FROM work_records WHERE employee_id = ? AND target_date = ? AND target_type = 'break_duration'",
 				req.EmployeeID, req.OldTargetDate).Scan(&count)
@@ -1350,7 +1366,6 @@ func updateWorkRecordHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if count > 0 {
-				// すでに存在するので UPDATE
 				query = "UPDATE work_records SET break_duration = ? WHERE employee_id = ? AND target_date = ? AND target_type = 'break_duration'"
 				_, err = db.Exec(query, breakDuration, req.EmployeeID, req.OldTargetDate)
 				if err != nil {
@@ -1359,7 +1374,6 @@ func updateWorkRecordHandler(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			} else {
-				// 存在しなければ INSERT
 				insertQuery := "INSERT INTO work_records (employee_id, target_date, target_time, target_type, break_duration) VALUES (?, ?, ?, 'break_duration', ?)"
 				_, err := db.Exec(insertQuery, req.EmployeeID, req.OldTargetDate, "00:00", breakDuration)
 				if err != nil {
@@ -1369,7 +1383,6 @@ func updateWorkRecordHandler(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-
 	} else {
 		// 通常の更新（出勤、退勤、休憩開始、休憩終了）の場合
 		query = "UPDATE work_records SET target_date = ?, target_time = ? WHERE employee_id = ? AND target_date = ? AND target_time = ? AND target_type = ?"

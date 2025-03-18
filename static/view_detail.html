@@ -801,30 +801,39 @@
             tdDate.innerText = `${mon}/${dayStr}`;
             tr.appendChild(tdDate);
             
-            // 出勤・退勤セル
-            const tdWorkTime = document.createElement("td");
-            if (groupedRecords[dateStr]) {
-              const group = groupedRecords[dateStr];
-              if (group.hasPaidVacation) {
-                tdWorkTime.innerText = "有給休暇";
-              } else if (group.workTimes && group.workTimes.length > 0) {
-                const clockIn = group.workTimes.find(wt => wt.type === "clock_in");
-                const clockOut = group.workTimes.find(wt => wt.type === "clock_out");
-                if (clockIn) {
-                  tdWorkTime.innerHTML += `<span class="editable-time" data-type="clock_in" data-date="${dateStr}" data-time="${clockIn.time}" data-employee-id="${group.employeeId}">${clockIn.time.substring(0, 5)}</span>`;
-                }
-                if (clockOut) {
-                  tdWorkTime.innerHTML += ` ~ <span class="editable-time" data-type="clock_out" data-date="${dateStr}" data-time="${clockOut.time}" data-employee-id="${group.employeeId}">${clockOut.time.substring(0, 5)}</span>`;
-                }
-              } else {
-                // 履歴はあるが出勤記録がない場合、新規入力用
-                tdWorkTime.innerHTML = `<span class="editable-time" data-type="clock_in_new" data-date="${dateStr}" data-employee-id="${currentEmployeeId}" style="color: #888; cursor: pointer;">－:－</span>`;
-              }
-            } else {
-              // 記録がない場合も新規入力用
-              tdWorkTime.innerHTML = `<span class="editable-time" data-type="clock_in_new" data-date="${dateStr}" data-employee-id="${currentEmployeeId}" style="color: #888; cursor: pointer;">－:－</span>`;
-            }
-            tr.appendChild(tdWorkTime);
+            // 出勤・退勤セル（修正後）
+const tdWorkTime = document.createElement("td");
+if (groupedRecords[dateStr]) {
+  const group = groupedRecords[dateStr];
+  if (group.hasPaidVacation) {
+    tdWorkTime.innerText = "有給休暇";
+  } else {
+    // 既存の出勤記録を取得（存在しなければ null）
+    const clockIn = group.workTimes.find(wt => wt.type === "clock_in");
+    // 既存の退勤記録を取得（存在しなければ null）
+    const clockOut = group.workTimes.find(wt => wt.type === "clock_out");
+    
+    // 出勤記録があれば表示、なければ新規入力用のスパンを表示
+    if (clockIn) {
+      tdWorkTime.innerHTML += `<span class="editable-time" data-type="clock_in" data-date="${dateStr}" data-time="${clockIn.time}" data-employee-id="${group.employeeId}">${clockIn.time.substring(0, 5)}</span>`;
+    } else {
+      tdWorkTime.innerHTML += `<span class="editable-time" data-type="clock_in_new" data-date="${dateStr}" data-employee-id="${currentEmployeeId}" style="color: #888; cursor: pointer;">－:－</span>`;
+    }
+    
+    // 退勤記録があれば表示、なければ新規入力用のスパンを表示
+    if (clockOut) {
+      tdWorkTime.innerHTML += ` ~ <span class="editable-time" data-type="clock_out" data-date="${dateStr}" data-time="${clockOut.time}" data-employee-id="${group.employeeId}">${clockOut.time.substring(0, 5)}</span>`;
+    } else {
+      tdWorkTime.innerHTML += ` ~ <span class="editable-time" data-type="clock_out_new" data-date="${dateStr}" data-employee-id="${currentEmployeeId}" style="color: #888; cursor: pointer;">－:－</span>`;
+    }
+  }
+} else {
+  // 記録がまったくない場合は、出勤・退勤ともに新規入力用を表示
+  tdWorkTime.innerHTML = `<span class="editable-time" data-type="clock_in_new" data-date="${dateStr}" data-employee-id="${currentEmployeeId}" style="color: #888; cursor: pointer;">－:－</span>
+                           ~ <span class="editable-time" data-type="clock_out_new" data-date="${dateStr}" data-employee-id="${currentEmployeeId}" style="color: #888; cursor: pointer;">－:－</span>`;
+}
+tr.appendChild(tdWorkTime);
+
             
             // 休憩セル
             const tdBreakTime = document.createElement("td");
