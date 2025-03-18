@@ -1765,6 +1765,10 @@ func exportExcelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	rowIndex := 2
 	for _, ms := range monthlySummaries {
+		// 従業員番号が "ZY" または "ZZ" で始まる場合はスキップする
+		if strings.HasPrefix(ms.EmpNumber, "ZY") || strings.HasPrefix(ms.EmpNumber, "ZZ") {
+			continue
+		}
 		f.SetCellValue(monthlySheet, fmt.Sprintf("A%d", rowIndex), ms.EmpNumber)
 		f.SetCellValue(monthlySheet, fmt.Sprintf("B%d", rowIndex), ms.EmpName)
 		f.SetCellValue(monthlySheet, fmt.Sprintf("C%d", rowIndex), ms.HourlyWage)
@@ -1800,6 +1804,10 @@ func exportExcelHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 各従業員のカレンダーブロックを横に配置する
 	for index, ms := range partEmployees {
+		// 従業員番号が "ZY" または "ZZ" で始まる場合はスキップする
+		if strings.HasPrefix(ms.EmpNumber, "ZY") || strings.HasPrefix(ms.EmpNumber, "ZZ") {
+			continue
+		}
 		rowBlock := index / blocksPerRow        // ブロック行番号
 		colBlock := index % blocksPerRow        // 同一行内でのブロック位置
 		startRow := rowBlock*blockHeight + 1    // ブロック開始行
