@@ -642,6 +642,10 @@ func saveMemoHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println("Decode Error in /api/saveMemo:", err)
 		return
 	}
+	// 空の場合はデフォルト値 "00:00:00" をセットする
+	if strings.TrimSpace(req.TargetTime) == "" {
+		req.TargetTime = "00:00:00"
+	}
 	updateQuery := "UPDATE work_records SET memo = ? WHERE employee_id = ? AND target_date = ? AND target_time = ?"
 	_, err := db.Exec(updateQuery, req.Memo, req.EmployeeID, req.TargetDate, req.TargetTime)
 	if err != nil {
@@ -1292,6 +1296,7 @@ func jobSummaryHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // 【新規追加】タイムレコーダー記録更新API
+// 【修正】タイムレコーダー記録更新API
 func updateWorkRecordHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -1318,30 +1323,63 @@ func updateWorkRecordHandler(w http.ResponseWriter, r *http.Request) {
 	var query string
 	var args []interface{}
 
-	// 休憩時間の場合は、break_durationカラムを更新する
 	if req.TargetType == "break_duration" {
-		// new_target_time を数値に変換
-		breakDuration, err := strconv.Atoi(req.NewTargetTime)
-		if err != nil {
-			log.Println("Invalid break duration:", err)
-			http.Error(w, "Invalid break duration", http.StatusBadRequest)
-			return
+		// もし新しい値が空文字の場合は削除処理を行う
+		if strings.TrimSpace(req.NewTargetTime) == "" {
+			delQuery := "DELETE FROM work_records WHERE employee_id = ? AND target_date = ? AND target_type = 'break_duration'"
+			_, err := db.Exec(delQuery, req.EmployeeID, req.OldTargetDate)
+			if err != nil {
+				log.Println("Database error on delete:", err)
+				http.Error(w, "Database error", http.StatusInternalServerError)
+				return
+			}
+		} else {
+			breakDuration, err := strconv.Atoi(req.NewTargetTime)
+			if err != nil {
+				log.Println("Invalid break duration:", err)
+				http.Error(w, "Invalid break duration", http.StatusBadRequest)
+				return
+			}
+			// まず、対象レコードが存在するかチェックする
+			var count int
+			err = db.QueryRow("SELECT COUNT(*) FROM work_records WHERE employee_id = ? AND target_date = ? AND target_type = 'break_duration'",
+				req.EmployeeID, req.OldTargetDate).Scan(&count)
+			if err != nil {
+				log.Println("Database error during existence check:", err)
+				http.Error(w, "Database error", http.StatusInternalServerError)
+				return
+			}
+			if count > 0 {
+				// すでに存在するので UPDATE
+				query = "UPDATE work_records SET break_duration = ? WHERE employee_id = ? AND target_date = ? AND target_type = 'break_duration'"
+				_, err = db.Exec(query, breakDuration, req.EmployeeID, req.OldTargetDate)
+				if err != nil {
+					log.Println("Database error during update:", err)
+					http.Error(w, "Database error", http.StatusInternalServerError)
+					return
+				}
+			} else {
+				// 存在しなければ INSERT
+				insertQuery := "INSERT INTO work_records (employee_id, target_date, target_time, target_type, break_duration) VALUES (?, ?, ?, 'break_duration', ?)"
+				_, err := db.Exec(insertQuery, req.EmployeeID, req.OldTargetDate, "00:00", breakDuration)
+				if err != nil {
+					log.Println("Database error during insert:", err)
+					http.Error(w, "Database error", http.StatusInternalServerError)
+					return
+				}
+			}
 		}
-		query = "UPDATE work_records SET break_duration = ? WHERE employee_id = ? AND target_date = ? AND target_type = 'break_duration'"
-		args = []interface{}{breakDuration, req.EmployeeID, req.OldTargetDate}
+
 	} else {
-		// 通常の更新（出勤、退勤、休憩開始、休憩終了）では、target_dateとtarget_timeでレコードを特定
+		// 通常の更新（出勤、退勤、休憩開始、休憩終了）の場合
 		query = "UPDATE work_records SET target_date = ?, target_time = ? WHERE employee_id = ? AND target_date = ? AND target_time = ? AND target_type = ?"
 		args = []interface{}{req.NewTargetDate, req.NewTargetTime, req.EmployeeID, req.OldTargetDate, req.OldTargetTime, req.TargetType}
-	}
-
-	log.Printf("Executing query: %s with args: %+v\n", query, args)
-
-	_, err := db.Exec(query, args...)
-	if err != nil {
-		log.Println("Database error:", err)
-		http.Error(w, "Database error", http.StatusInternalServerError)
-		return
+		_, err := db.Exec(query, args...)
+		if err != nil {
+			log.Println("Database error:", err)
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	w.Header().Set("Content-Type", "text/plain")

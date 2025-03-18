@@ -157,8 +157,12 @@
             <input type="number" class="form-control" id="paid_vacation_limit" required>
           </div>
           <div class="mb-3">
-            <label for="paid_vacation_grant_date" class="form-label">入社日:</label>
-            <input type="date" class="form-control" id="paid_vacation_grant_date" required>
+            <div class="row">
+              <div class="col-md-6">
+                <label for="paid_vacation_grant_date" class="form-label">入社日:</label>
+                <input type="date" class="form-control" id="paid_vacation_grant_date" required>
+              </div>
+            </div>
           </div>
           <button type="submit" class="btn btn-success">追加</button>
         </form>
@@ -216,6 +220,8 @@
     </div>
   
     <script>
+
+      
       function fetchEmployees() {
         fetch('/api/employees')
           .then(response => {
@@ -315,11 +321,39 @@
           });
       }
 
+      // 新規従業員追加フォーム用：職種セレクトボックスにオプションを設定する関数
+      function populateEmployeeJobSelect() {
+        fetch('/api/jobTypes')
+          .then(response => {
+            if (!response.ok) {
+              throw new Error('職種一覧の取得に失敗しました');
+            }
+            return response.json();
+          })
+          .then(data => {
+            const select = document.getElementById('employee_job');
+            // 既存のオプションをクリアし、初期オプションを設定
+            select.innerHTML = '<option value="">-- 職種を選択してください --</option>';
+            data.forEach(job => {
+              const option = document.createElement('option');
+              // ここではjob.nameを値として設定していますが、必要に応じてjob.codeに変更できます
+              option.value = job.name;
+              option.textContent = `${job.name} (${job.code})`;
+              select.appendChild(option);
+            });
+          })
+          .catch(error => {
+            console.error('職種取得エラー:', error);
+          });
+      }
+
+
 
       // ページ読み込み時および必要に応じて不整合一覧を取得
       window.addEventListener("load", function() {
         fetchEmployees();
         fetchInconsistencies();
+        populateEmployeeJobSelect();
       });
     </script>
 
@@ -372,6 +406,7 @@
             return response.json();
           })
           .then(data => {
+            alert('従業員を追加しました: ' + data.employee_number + ' ' + data.name);
             fetchEmployees();
           })
           .catch(error => {
