@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>退職者一覧</title>
+    <!-- Bootstrap 5 CDN -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css"
+    />
+    <style>
+      body {
+        background-color: #ffffff;
+        color: #1e64aa;
+      }
+      .container-custom {
+        background-color: #ebf3ff;
+        padding: 2rem;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      .header-title {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #1e64aa;
+      }
+      .section-title {
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+        color: #1e64aa;
+      }
+      .table thead {
+        background-color: #285ac8;
+        color: #ffffff;
+      }
+      .table-striped tbody tr:nth-of-type(odd) {
+        background-color: #ffffff;
+      }
+      .table-striped tbody tr:nth-of-type(even) {
+        background-color: #ebf3ff;
+      }
+      .btn-primary {
+        background-color: #285ac8;
+        border-color: #285ac8;
+      }
+      .btn-primary:hover {
+        background-color: #2864f0;
+        border-color: #2864f0;
+      }
+      .btn-danger:hover {
+        opacity: 0.8;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container container-custom my-4">
+      <!-- ヘッダー -->
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <span class="header-title">退職者一覧</span>
+        </div>
+        <div>
+          <!-- 他の画面へのリンク例 -->
+          <a href="view_home.html" class="btn btn-secondary me-2">一般従業員一覧へ</a>
+        </div>
+      </div>
+
+      <!-- 従業員一覧 -->
+      <div class="mb-4">
+        <h3>退職者一覧</h3>
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th>従業員番号</th>
+              <th>名前</th>
+              <th>職種</th>
+              <th>職種コード</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="employeeTableBody">
+            <!-- ZZ従業員のみ動的に追加 -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <script>
+      function getQueryParam(param) {
+        const params = new URLSearchParams(window.location.search);
+        return params.get(param);
+      }
+      // 従業員番号から不要な部分を削除
+      function getEmployeeNumber(empNum) {
+        return empNum ? empNum.replace(/:.*/, "") : empNum;
+      }
+      function fetchEmployees() {
+        fetch('/api/employees')
+          .then(response => {
+            if (!response.ok) {
+              throw new Error('サーバーエラー: ' + response.status);
+            }
+            return response.json();
+          })
+          .then(data => {
+            const tableBody = document.getElementById("employeeTableBody");
+            tableBody.innerHTML = ""; // 既存データをクリア
+            data.forEach(emp => {
+              // 従業員番号の先頭2文字が "ZZ" の場合のみ表示する
+              if (!emp.employee_number.startsWith("ZZ")) {
+                return;
+              }
+              const row = document.createElement("tr");
+              row.innerHTML = `
+                <td><a href="view_detail.html?empNumber=${emp.employee_number}">${emp.employee_number}</a></td>
+                <td>${emp.name}</td>
+                <td>${emp.job}</td>
+                <td>${emp.job_code}</td>
+                <td>
+                  <button class="btn btn-danger btn-sm" onclick="handleDeleteEmployee('${emp.employee_number}')">
+                    削除
+                  </button>
+                </td>
+              `;
+              tableBody.appendChild(row);
+            });
+          })
+          .catch(error => console.error('従業員取得エラー:', error));
+      }
+
+      function handleDeleteEmployee(employeeNumber) {
+        if (!confirm(`従業員番号 ${employeeNumber} を削除しますか？`)) {
+          return;
+        }
+        fetch('/api/deleteEmployee', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ employee_number: employeeNumber })
+        })
+          .then(response => response.text())
+          .then(data => {
+            alert(data);
+            fetchEmployees(); // 削除後にリスト更新
+          })
+          .catch(error => console.error('削除エラー:', error));
+      }
+
+      // ページ読み込み時に従業員一覧を取得
+      fetchEmployees();
+    </script>
+  </body>
+</html>

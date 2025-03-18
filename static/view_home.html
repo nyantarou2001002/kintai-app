@@ -74,6 +74,8 @@
             >月次勤怠レポートを見る</a
           >
           <a href="index.html" class="btn btn-secondary me-2">打刻画面に戻る</a>
+          <a href="view_zz.html" class="btn btn-secondary me-2">退職者一覧へ</a>
+          <a href="view_zy.html" class="btn btn-secondary me-2">過去の情報一覧へ</a>
         </div>
       </div>
 
@@ -222,38 +224,44 @@
     <script>
 
       
-      function fetchEmployees() {
-        fetch('/api/employees')
-          .then(response => {
-            if (!response.ok) {
-              throw new Error('サーバーエラー: ' + response.status);
-            }
-            return response.json();
-          })
-          .then(data => {
-            const tableBody = document.getElementById("employeeTableBody");
-            tableBody.innerHTML = ""; // 既存データをクリア
-  
-            data.forEach(emp => {
-              const row = document.createElement("tr");
-              row.innerHTML = `
-                <td><a href="view_detail.html?empNumber=${emp.employee_number}">${emp.employee_number}</a></td>
-                <td>${emp.name}</td>
-                <td>${emp.job}</td>
-                <td>${emp.job_code}</td>
-                <td>
-                  <button class="btn btn-danger btn-sm" onclick="handleDeleteEmployee('${emp.employee_number}')">
-                    削除
-                  </button>
-                </td>
-              `;
-              tableBody.appendChild(row);
-            });
-
-
-          })
-          .catch(error => console.error('従業員取得エラー:', error));
+function fetchEmployees() {
+  fetch('/api/employees')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('サーバーエラー: ' + response.status);
       }
+      return response.json();
+    })
+    .then(data => {
+      const tableBody = document.getElementById("employeeTableBody");
+      tableBody.innerHTML = ""; // 既存データをクリア
+
+      data.forEach(emp => {
+        // ★追加★ 従業員番号が "ZZ" で始まる場合はスキップする
+        if (emp.employee_number.startsWith("ZZ")) {
+          return; // この従業員は view_home には表示せず、view_zz.html で表示します
+        }
+        if(emp.employee_number.startsWith("ZY")){
+          return;
+        }
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td><a href="view_detail.html?empNumber=${emp.employee_number}">${emp.employee_number}</a></td>
+          <td>${emp.name}</td>
+          <td>${emp.job}</td>
+          <td>${emp.job_code}</td>
+          <td>
+            <button class="btn btn-danger btn-sm" onclick="handleDeleteEmployee('${emp.employee_number}')">
+              削除
+            </button>
+          </td>
+        `;
+        tableBody.appendChild(row);
+      });
+    })
+    .catch(error => console.error('従業員取得エラー:', error));
+}
+
 
       function handleDeleteEmployee(employeeNumber) {
         if (!confirm(`従業員番号 ${employeeNumber} を削除しますか？`)) {
