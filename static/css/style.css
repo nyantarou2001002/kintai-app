@@ -1,0 +1,25 @@
+/* filepath: /Users/itokumiko/Desktop/kintai-app/static/css/style.css */
+
+/* フリーの青 */
+:root {
+    --bs-primary: #00A3E0;
+    --bs-primary-rgb: 0, 163, 224;
+    --bs-primary-hover: #008BCB;
+  }
+  
+  .btn-primary {
+    --bs-btn-bg: var(--bs-primary);
+    --bs-btn-border-color: var(--bs-primary);
+    --bs-btn-hover-bg: var(--bs-primary-hover);
+    --bs-btn-hover-border-color: var(--bs-primary-hover);
+    --bs-btn-active-bg: var(--bs-primary-hover);
+    --bs-btn-active-border-color: var(--bs-primary-hover);
+  }
+  
+  .text-primary {
+    color: var(--bs-primary) !important;
+  }
+  
+  .btn-custom {
+    width: 100px;
+  }

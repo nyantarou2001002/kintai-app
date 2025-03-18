@@ -5,57 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>勤怠管理システム</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style>
-    /* freeeのブルー */
-    :root {
-      --freee-blue: #00A3E0;
-      --freee-light-blue: #E6F7FE;
-      --freee-gray: #F4F4F4;
-    }
-
-    body {
-        background-color: #f0f8ff;
-        color: #1e64aa;
-      }
-
-    .container-custom {
-      background: white;
-      border-radius: 10px;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-      padding: 30px;
-    }
-
-    .header-title {
-        color: #1e64aa;
-      }
-
-    .btn-primary {
-      background-color: var(--freee-blue);
-      border: none;
-    }
-
-    .btn-primary:hover {
-      background-color: #008BCB;
-    }
-
-    .form-select, .form-control {
-      border: 2px solid var(--freee-blue);
-    }
-
-    h1 {
-      color: var(--freee-blue);
-      font-weight: bold;
-    }
-
-    .btn-custom {
-      width: 100px;
-    }
-  </style>
+  <link href="/css/style.css" rel="stylesheet">
 </head>
-<body>
+<body class="bg-light text-primary">
   <div class="container mt-5">
-    <div class="container-custom bg-light p-4 rounded shadow">
-      <h1 class="text-center header-title">勤怠管理システム</h1>
+    <div class="bg-white p-4 rounded shadow">
+      <h1 class="text-center text-primary fw-bold">勤怠管理システム</h1>
       <p class="text-center text-muted">従業員を選択し、打刻を行ってください。</p>
       
       <div class="text-center mb-4">
@@ -64,7 +19,7 @@
 
       <div class="mb-4">
         <label for="employeeSelect" class="form-label">従業員を選択:</label>
-        <select id="employeeSelect" class="form-select">
+        <select id="employeeSelect" class="form-select border-primary">
           <option value="">-- 従業員を選択してください --</option>
         </select>
       </div>
@@ -76,15 +31,15 @@
 
       <!-- 休憩時間入力欄と休憩登録ボタンを追加 -->
       <div class="text-center mb-4">
-        <input type="number" id="breakDurationInput" class="form-control d-inline-block" style="width:150px;" placeholder="休憩時間（分）">
-        <button class="btn btn-info btn-custom" onclick="recordImmediate('break_duration')">休憩登録</button>
+        <input type="number" id="breakDurationInput" class="form-control d-inline-block border-primary" style="width:150px;" placeholder="休憩時間（分）">
+        <button class="btn btn-info btn-custom text-white" onclick="recordImmediate('break_duration')">休憩登録</button>
       </div>
 
-      <div class="mb-4 ">
-        <h2 class="text-center header-title">有給休暇登録</h3>
+      <div class="mb-4">
+        <h2 class="text-center text-primary fw-bold">有給休暇登録</h2>
         <form onsubmit="return handlePaidVacationSubmit(this)" class="text-center">
           <div class="d-flex justify-content-center">
-            <input type="date" name="target_date" class="form-control w-50 me-2" required>
+            <input type="date" name="target_date" class="form-control w-50 me-2 border-primary" required>
             <button type="submit" class="btn btn-primary">登録</button>
           </div>
         </form>
