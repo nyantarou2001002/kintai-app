@@ -129,9 +129,98 @@
       </form>
     </div>
 
+     <!-- 本日の打刻履歴表示エリア -->
+<div class="mb-4">
+  <div class="text-center mb-2">
+    <h3 class="section-title">本日の打刻履歴</h3>
+  </div>
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        <th>時刻</th>
+        <th>打刻種別</th>
+      </tr>
+    </thead>
+    <tbody id="todayRecordsTable">
+      <tr>
+        <td colspan="2" class="text-center">データなし</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- メッセージ入力欄と送信ボタン -->
+<div class="mb-4">
+  <label for="messageInput" class="form-label">メッセージを入力:</label>
+  <div class="input-group">
+    <input type="text" id="messageInput" class="form-control" placeholder="メッセージを入力">
+    <button class="btn btn-primary" onclick="saveMessage()">送信</button>
+  </div>
+</div>
+
     <!-- アラートメッセージ表示エリア -->
     <div id="alertArea" class="alert" role="alert"></div>
   </div>
+
+
+  <script>
+    // 従業員が選択されたときに本日の打刻履歴を取得
+    document.getElementById("employeeSelect").addEventListener("change", function() {
+      const selectedValue = this.value;
+      if (!selectedValue) {
+        document.getElementById("todayRecordsTable").innerHTML = '<tr><td colspan="2" class="text-center">データなし</td></tr>';
+        return;
+      }
+      
+      fetch(`/api/todayTimeRecords?empNumber=${selectedValue}`)
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('打刻履歴を取得できませんでした');
+      }
+      return response.json();
+    })
+    .then(records => {
+      if (!records || !Array.isArray(records)) {
+        records = []; // `null` や `undefined` の場合、空配列に置き換え
+      }
+  
+      const tableBody = document.getElementById("todayRecordsTable");
+      tableBody.innerHTML = ""; // クリア
+  
+      if (records.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="2" class="text-center">データなし</td></tr>';
+        return;
+      }
+  
+      records.forEach(record => {
+        const row = document.createElement("tr");
+        row.innerHTML = `<td>${record.target_time}</td><td>${convertRecordType(record.target_type)}</td>`;
+        tableBody.appendChild(row);
+      });
+    })
+    .catch(error => {
+      console.error('打刻履歴取得エラー:', error);
+      document.getElementById("todayRecordsTable").innerHTML = '<tr><td colspan="2" class="text-center">取得失敗</td></tr>';
+    });
+  
+    });
+  
+    // 打刻種別を日本語に変換
+    function convertRecordType(type) {
+      switch(type) {
+        case 'clock_in': return '出勤';
+        case 'clock_out': return '退勤';
+        case 'break_start': return '休憩開始';
+        case 'break_end': return '休憩終了';
+        case 'break_duration': return '休憩時間登録';
+        case 'paid_vacation': return '有給休暇';
+        default: return type;
+      }
+    }
+  </script>
+  
+  
+
 
   <script>
     // 従業員データを格納するグローバル変数
@@ -166,7 +255,7 @@
       // 5秒後に自動的に消す
       setTimeout(() => {
         alertArea.style.display = 'none';
-      }, 5000);
+      }, 10000);
     }
 
     function fetchEmployees() {
@@ -230,211 +319,255 @@
         });
     }
 
-    function getJapanDateString() {
-      const now = new Date();
-      now.setMinutes(now.getMinutes() - now.getTimezoneOffset()); // UTCからJSTへ変換
-      const year = now.getFullYear();
-      const month = (now.getMonth() + 1).toString().padStart(2, "0"); // 2桁にする
-      const day = now.getDate().toString().padStart(2, "0"); // 2桁にする
-      return `${year}-${month}-${day}`; // YYYY-MM-DD 形式
-    }
 
-    // タイムレコーダーの記録を保存する関数
-    function recordImmediate(type) {
-      // 従業員が選択されているか確認
-      const select = document.getElementById("employeeSelect");
-      const selectedValue = select.value;
-      if (!selectedValue) {
-        showAlert("従業員を選択してください", "warning");
+
+
+    function getJapanDateString() {
+  // 現在のローカル時間を取得
+  const now = new Date();
+
+  // UTC時間ではなくローカル時間を直接使用
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0"); // 2桁表示
+  const day = String(now.getDate()).padStart(2, "0"); // 2桁表示
+
+  return `${year}-${month}-${day}`; // YYYY-MM-DD 形式
+}
+
+function updateTodayRecords() {
+  const select = document.getElementById("employeeSelect");
+  const selectedValue = select.value;
+  if (!selectedValue) {
+    return;
+  }
+
+  fetch(`/api/todayTimeRecords?empNumber=${selectedValue}`)
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('打刻履歴を取得できませんでした');
+      }
+      return response.json();
+    })
+    .then(records => {
+      const tableBody = document.getElementById("todayRecordsTable");
+      tableBody.innerHTML = ""; // クリア
+
+      if (!records || records.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="2" class="text-center">データなし</td></tr>';
         return;
       }
-      
-      // 選択した従業員の詳細情報を取得
-      const selectedOption = select.options[select.selectedIndex];
-      const employeeNumber = selectedOption.dataset.employeeNumber;
-      
-      // ここからは従業員IDを使用
-      const now = new Date();
-      const target_date = getJapanDateString(); // YYYY-MM-DD 形式
-      const target_time = now.toTimeString().slice(0, 5); // HH:MM 形式
 
-      // 従業員詳細APIを呼び出して、正確なIDを取得
-      showAlert("従業員情報を取得中...", "info");
+      records.forEach(record => {
+        const row = document.createElement("tr");
+        row.innerHTML = `<td>${record.target_time}</td><td>${convertRecordType(record.target_type)}</td>`;
+        tableBody.appendChild(row);
+      });
+    })
+    .catch(error => {
+      console.error('打刻履歴取得エラー:', error);
+      document.getElementById("todayRecordsTable").innerHTML = '<tr><td colspan="2" class="text-center">取得失敗</td></tr>';
+    });
+}
 
-      fetch(`/api/employeeDetail?empNumber=${employeeNumber}`)
-        .then(response => {
-          if (!response.ok) {
-            throw new Error("従業員詳細を取得できませんでした");
-          }
-          return response.json();
-        })
-        .then(employeeDetail => {
-          console.log("従業員詳細:", employeeDetail);
-          
-          // ここで取得した正確なIDを使用してレコードを作成
-          const record = {
-            employee_id: employeeDetail.id,
-            target_date: target_date,
-            target_time: target_time,
-            target_type: type
-          };
+function recordImmediate(type) {
+  const select = document.getElementById("employeeSelect");
+  const selectedValue = select.value;
+  if (!selectedValue) {
+    showAlert("従業員を選択してください", "warning");
+    return;
+  }
 
-          // 休憩時間登録の場合、入力値をペイロードに追加
-          if (type === 'break_duration') {
-            const breakInput = document.getElementById("breakDurationInput");
-            const breakDuration = parseInt(breakInput.value);
-            if (isNaN(breakDuration) || breakDuration < 1) {
-              showAlert("休憩時間は1分以上の値を入力してください", "warning");
-              return;
-            }
-            record.break_duration = breakDuration;
-          }
+  const selectedOption = select.options[select.selectedIndex];
+  const employeeNumber = selectedOption.dataset.employeeNumber;
 
-          // 処理中メッセージ
-          let actionText = '';
-          switch(type) {
-            case 'clock_in': actionText = '出勤'; break;
-            case 'clock_out': actionText = '退勤'; break;
-            case 'break_duration': actionText = '休憩時間'; break;
-            default: actionText = '記録'; break;
-          }
-          
-          showAlert(`${actionText}の記録を処理中...`, "info");
+  const target_date = getJapanDateString();
+  const now = new Date();
+  const target_time = now.toTimeString().slice(0, 5); // HH:MM 形式
 
-          console.log("サーバーに送信するデータ:", record);
-
-          return fetch('/api/saveWorkRecord', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(record)
-          })
-          .then(response => {
-            console.log("サーバーからのレスポンス:", response.status);
-            
-            if (!response.ok) {
-              // エラーレスポンスの場合はテキスト内容も取得
-              return response.text().then(text => { 
-                console.log("エラーレスポンス:", text);
-                throw new Error(text || `サーバーエラー: ${response.status}`); 
-              });
-            }
-            return response.text();
-          })
-          .then(data => {
-            console.log("成功レスポンス:", data);
-            
-            // 成功時のメッセージを操作タイプに応じて変更
-            let successMessage;
-            switch(type) {
-              case 'clock_in':
-                successMessage = "出勤の打刻に成功しました";
-                break;
-              case 'clock_out':
-                successMessage = "退勤の打刻に成功しました";
-                break;
-              case 'break_duration':
-                successMessage = "休憩時間の登録に成功しました";
-                break;
-              default:
-                successMessage = data || "記録に成功しました";
-            }
-            showAlert(successMessage, "success");
-            
-            // 休憩時間入力欄を元の値に戻す
-            if(type === 'break_duration') {
-              document.getElementById("breakDurationInput").value = "30";
-            }
-          });
-        })
-        .catch(error => {
-          console.error('API呼び出しエラー:', error);
-          
-          // エラーメッセージの整形
-          let errorMsg = error.message;
-          if (typeof errorMsg === 'string' && errorMsg.length > 100) {
-            // 長すぎるエラーメッセージは切り詰める
-            errorMsg = errorMsg.substring(0, 100) + "...";
-          }
-          
-          showAlert(`操作に失敗しました: ${errorMsg}`, "danger");
-        });
-    }
-    
-    // 有給休暇の登録処理
-    function handlePaidVacationSubmit(formObject) {
-      // 従業員が選択されているか確認
-      const select = document.getElementById("employeeSelect");
-      const selectedValue = select.value;
-      if (!selectedValue) {
-        showAlert("従業員を選択してください", "warning");
-        return false;
+  fetch(`/api/todayTimeRecords?empNumber=${employeeNumber}`)
+    .then(response => {
+      if (!response.ok) {
+        throw new Error("打刻履歴を取得できませんでした");
       }
-      
-      // 選択した従業員の詳細情報を取得
-      const selectedOption = select.options[select.selectedIndex];
-      const employeeNumber = selectedOption.dataset.employeeNumber;
-      
-      // 従業員詳細APIを呼び出して、正確なIDを取得
-      showAlert("有給休暇の登録を処理中...", "info");
+      return response.json();
+    })
+    .then(records => {
+      if (type === 'break_duration' && records.some(record => record.target_type === 'break_duration')) {
+        showAlert("すでに本日の休憩時間が登録されています", "warning");
+        return;
+      }
 
-      fetch(`/api/employeeDetail?empNumber=${employeeNumber}`)
-        .then(response => {
-          if (!response.ok) {
-            throw new Error("従業員詳細を取得できませんでした");
-          }
-          return response.json();
-        })
-        .then(employeeDetail => {
-          console.log("従業員詳細 (有給):", employeeDetail);
-          
-          const record = {
-            employee_id: employeeDetail.id,
-            target_date: formObject.target_date.value,
-            target_time: "00:00",
-            target_type: "paid_vacation"
-          };
+      return fetch(`/api/employeeDetail?empNumber=${employeeNumber}`);
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error("従業員詳細を取得できませんでした");
+      }
+      return response.json();
+    })
+    .then(employeeDetail => {
+      if (!employeeDetail) return;
 
-          console.log("サーバーに送信するデータ (有給):", record);
+      const record = {
+        employee_id: employeeDetail.id,
+        target_date: target_date,
+        target_time: target_time,
+        target_type: type
+      };
 
-          return fetch('/api/saveWorkRecord', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(record)
-          })
-          .then(response => {
-            console.log("サーバーからのレスポンス (有給):", response.status);
-            
-            if (!response.ok) {
-              // エラーレスポンスの場合はテキスト内容も取得
-              return response.text().then(text => { 
-                console.log("有給エラーレスポンス:", text);
-                throw new Error(text || `サーバーエラー: ${response.status}`); 
-              });
-            }
-            return response.text();
-          })
-          .then(data => {
-            console.log("有給成功レスポンス:", data);
-            showAlert("有給休暇の登録に成功しました", "success");
-          });
-        })
-        .catch(error => {
-          console.error('有給API呼び出しエラー:', error);
-          
-          // エラーメッセージの確認
-          const errorMsg = error.message;
-          if (errorMsg.includes("有給休暇") || 
-              errorMsg.includes("使用できる") || 
-              errorMsg.includes("available") || 
-              errorMsg.includes("insufficient")) {
-            showAlert("取得可能な有給休暇日数がありません。", "warning");
-          } else {
-            showAlert(`有給休暇登録エラー: ${errorMsg}`, "danger");
-          }
-        });
+      if (type === 'break_duration') {
+        const breakInput = document.getElementById("breakDurationInput");
+        const breakDuration = parseInt(breakInput.value);
+        if (isNaN(breakDuration) || breakDuration < 1) {
+          showAlert("休憩時間は1分以上の値を入力してください", "warning");
+          return;
+        }
+        record.break_duration = breakDuration;
+      }
 
-      return false;
+      showAlert(`"${type}" の記録を処理中...`, "info");
+
+      return fetch('/api/saveWorkRecord', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(record)
+      });
+    })
+    .then(response => {
+      if (response && !response.ok) {
+        return response.text().then(text => { throw new Error(text || `サーバーエラー: ${response.status}`); });
+      }
+      if (response) {
+        return response.text();
+      }
+    })
+    .then(data => {
+      if (data) {
+        showAlert(`"${type}" の記録が完了しました`, "success");
+        updateTodayRecords(); // 打刻履歴を更新
+      }
+    })
+    .catch(error => {
+      console.error('APIエラー:', error);
+      showAlert(`操作に失敗しました: ${error.message}`, "danger");
+    });
+}
+
+function handlePaidVacationSubmit(formObject) {
+  const select = document.getElementById("employeeSelect");
+  const selectedValue = select.value;
+  if (!selectedValue) {
+    showAlert("従業員を選択してください", "warning");
+    return false;
+  }
+
+  const selectedOption = select.options[select.selectedIndex];
+  const employeeNumber = selectedOption.dataset.employeeNumber;
+
+  showAlert("有給休暇の登録を処理中...", "info");
+
+  fetch(`/api/employeeDetail?empNumber=${employeeNumber}`)
+    .then(response => {
+      if (!response.ok) {
+        throw new Error("従業員詳細を取得できませんでした");
+      }
+      return response.json();
+    })
+    .then(employeeDetail => {
+      if (!employeeDetail) return;
+
+      const record = {
+        employee_id: employeeDetail.id,
+        target_date: formObject.target_date.value,
+        target_time: "00:00",
+        target_type: "paid_vacation"
+      };
+
+      return fetch('/api/saveWorkRecord', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(record)
+      });
+    })
+    .then(response => {
+      if (!response.ok) {
+        return response.text().then(text => { throw new Error(text || `サーバーエラー: ${response.status}`); });
+      }
+      return response.text();
+    })
+    .then(data => {
+      if (data) {
+        showAlert("有給休暇の登録に成功しました", "success");
+        updateTodayRecords(); // 打刻履歴を更新
+      }
+    })
+    .catch(error => {
+      console.error('有給API呼び出しエラー:', error);
+      showAlert(`有給休暇登録エラー: ${error.message}`, "danger");
+    });
+
+  return false;
+}
+
+function saveMessage() {
+    const select = document.getElementById("employeeSelect");
+    const selectedValue = select.value;
+    if (!selectedValue) {
+      showAlert("従業員を選択してください", "warning");
+      return;
     }
+
+    const selectedOption = select.options[select.selectedIndex];
+    const employeeNumber = selectedOption.dataset.employeeNumber;
+    const messageInput = document.getElementById("messageInput");
+    const newMessage = messageInput.value.trim();
+
+    if (!newMessage) {
+      showAlert("メッセージを入力してください", "warning");
+      return;
+    }
+
+    const targetDate = getJapanDateString();
+    
+    // 既存のメモを取得
+    fetch(`/api/timeRecords?empNumber=${employeeNumber}&month=${targetDate.slice(0, 7)}`)
+      .then(response => response.json())
+      .then(records => {
+        const todayRecord = records.find(rec => rec.target_date === targetDate);
+        const existingMemo = todayRecord ? todayRecord.memo : "";
+
+        const updatedMemo = existingMemo ? `${existingMemo}\n${newMessage}` : newMessage;
+
+        const payload = {
+          employee_id: todayRecord ? todayRecord.employee_id : selectedValue,
+          target_date: targetDate,
+          target_time: todayRecord ? todayRecord.target_time : "00:00",
+          memo: updatedMemo
+        };
+
+        return fetch('/api/saveMemo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      })
+      .then(response => {
+        if (!response.ok) {
+          return response.text().then(text => { throw new Error(text || "メモの保存に失敗しました"); });
+        }
+        return response.text();
+      })
+      .then(() => {
+        showAlert("メッセージを保存しました", "success");
+        messageInput.value = "";
+      })
+      .catch(error => {
+        console.error('メモ保存エラー:', error);
+        showAlert(`エラー: ${error.message}`, "danger");
+      });
+  }
+
+   
   </script>
 </body>
 </html>

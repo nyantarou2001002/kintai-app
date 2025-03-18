@@ -1952,6 +1952,61 @@ func updateJobTypeHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(req)
 }
 
+func todayTimeRecordsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	empNumber := r.URL.Query().Get("empNumber")
+	if empNumber == "" {
+		http.Error(w, "Missing employee number", http.StatusBadRequest)
+		return
+	}
+
+	var empID int
+	err := db.QueryRow("SELECT id FROM employees WHERE employee_number = ?", empNumber).Scan(&empID)
+	if err != nil {
+		http.Error(w, "Employee not found", http.StatusNotFound)
+		return
+	}
+
+	// 本日の日付を取得（YYYY-MM-DD）
+	today := time.Now().Format("2006-01-02")
+
+	rows, err := db.Query(
+		`SELECT employee_id, 
+		        DATE_FORMAT(target_time, '%H:%i:%s') as target_time, 
+		        target_type 
+		 FROM work_records 
+		 WHERE employee_id = ? 
+		   AND target_date = ? 
+		 ORDER BY target_time ASC`,
+		empID, today,
+	)
+
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Println("Query Error in todayTimeRecordsHandler:", err)
+		return
+	}
+	defer rows.Close()
+
+	var records []WorkRecord
+	for rows.Next() {
+		var rec WorkRecord
+		if err := rows.Scan(&rec.EmployeeID, &rec.TargetTime, &rec.TargetType); err != nil {
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			log.Println("Scan Error in todayTimeRecordsHandler:", err)
+			return
+		}
+		records = append(records, rec)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(records)
+}
+
 func main() {
 	initDB()
 	initializeSecretAnswer()
@@ -1981,6 +2036,7 @@ func main() {
 	http.HandleFunc("/api/saveMonthlyMemo", saveMonthlyMemoHandler)
 	http.HandleFunc("/api/exportExcel", exportExcelHandler)
 	http.HandleFunc("/api/updateJobType", updateJobTypeHandler)
+	http.HandleFunc("/api/todayTimeRecords", todayTimeRecordsHandler)
 
 	// その後、静的ファイルサーバーを登録する
 	http.Handle("/", http.FileServer(http.Dir("./static")))
