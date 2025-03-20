@@ -642,16 +642,32 @@ func saveMemoHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println("Decode Error in /api/saveMemo:", err)
 		return
 	}
-	// 空の場合はデフォルト値 "00:00:00" をセットする
+	// target_time が空の場合、"00:00:00" に補完
 	if strings.TrimSpace(req.TargetTime) == "" {
 		req.TargetTime = "00:00:00"
 	}
 	updateQuery := "UPDATE work_records SET memo = ? WHERE employee_id = ? AND target_date = ? AND target_time = ?"
-	_, err := db.Exec(updateQuery, req.Memo, req.EmployeeID, req.TargetDate, req.TargetTime)
+	result, err := db.Exec(updateQuery, req.Memo, req.EmployeeID, req.TargetDate, req.TargetTime)
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		log.Println("Update Error in /api/saveMemo:", err)
 		return
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Println("RowsAffected Error in /api/saveMemo:", err)
+		return
+	}
+	// もし更新対象のレコードがなかったら INSERT する
+	if rowsAffected == 0 {
+		insertQuery := "INSERT INTO work_records (employee_id, target_date, target_time, target_type, memo) VALUES (?, ?, ?, 'clock_in', ?)"
+		_, err = db.Exec(insertQuery, req.EmployeeID, req.TargetDate, req.TargetTime, req.Memo)
+		if err != nil {
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			log.Println("Insert Error in /api/saveMemo:", err)
+			return
+		}
 	}
 	w.Header().Set("Content-Type", "text/plain")
 	w.Write([]byte("メモを保存しました"))

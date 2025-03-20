@@ -172,37 +172,84 @@
         return;
       }
       
-      fetch(`/api/todayTimeRecords?empNumber=${selectedValue}`)
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('打刻履歴を取得できませんでした');
-      }
-      return response.json();
-    })
-    .then(records => {
-      if (!records || !Array.isArray(records)) {
-        records = []; // `null` や `undefined` の場合、空配列に置き換え
-      }
+      const selectedOption = this.options[this.selectedIndex];
+      const employeeNumber = selectedOption.dataset.employeeNumber;
+      
+      // 本日の日付を取得
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, "0");
+      const day = String(today.getDate()).padStart(2, "0");
+      const todayStr = `${year}-${month}-${day}`;
+      
+      // まず今日の打刻履歴を取得
+      fetch(`/api/todayTimeRecords?empNumber=${employeeNumber}`)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('打刻履歴を取得できませんでした');
+          }
+          return response.json();
+        })
+        .then(records => {
+          if (!records || !Array.isArray(records)) {
+            records = [];
+          }
+          
+          // 次に当月の完全な記録を取得して、break_duration情報を補完する
+          return fetch(`/api/timeRecords?empNumber=${employeeNumber}&month=${year}-${month}`)
+            .then(response => {
+              if (!response.ok) {
+                throw new Error('休憩時間データを取得できませんでした');
+              }
+              return response.json();
+            })
+            .then(fullRecords => {
+              // 今日の日付のレコードだけフィルタリング
+              const todayFullRecords = fullRecords.filter(rec => rec.target_date === todayStr);
+              
+              // 打刻種別ごとに休憩時間情報をマージ
+              records.forEach(record => {
+                // 対応する完全な記録を見つける
+                const matchingRecord = todayFullRecords.find(
+                  rec => rec.target_type === record.target_type && rec.target_time === record.target_time
+                );
+                
+                // 見つかった場合、break_duration情報をコピー
+                if (matchingRecord && matchingRecord.break_duration) {
+                  record.break_duration = matchingRecord.break_duration;
+                }
+              });
+              
+              return records;
+            });
+        })
+        .then(records => {
+          const tableBody = document.getElementById("todayRecordsTable");
+          tableBody.innerHTML = ""; // クリア
   
-      const tableBody = document.getElementById("todayRecordsTable");
-      tableBody.innerHTML = ""; // クリア
+          if (records.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="2" class="text-center">データなし</td></tr>';
+            return;
+          }
   
-      if (records.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="2" class="text-center">データなし</td></tr>';
-        return;
-      }
-  
-      records.forEach(record => {
-        const row = document.createElement("tr");
-        row.innerHTML = `<td>${record.target_time}</td><td>${convertRecordType(record.target_type)}</td>`;
-        tableBody.appendChild(row);
-      });
-    })
-    .catch(error => {
-      console.error('打刻履歴取得エラー:', error);
-      document.getElementById("todayRecordsTable").innerHTML = '<tr><td colspan="2" class="text-center">取得失敗</td></tr>';
-    });
-  
+          records.forEach(record => {
+            const row = document.createElement("tr");
+            // 打刻種別のカスタム表示（休憩時間の場合は分数を表示）
+            let typeDisplay = convertRecordType(record.target_type);
+            
+            // break_durationの場合、分数を表示
+            if (record.target_type === 'break_duration' && record.break_duration) {
+              typeDisplay = `休憩時間(${record.break_duration}分)`;
+            }
+            
+            row.innerHTML = `<td>${record.target_time}</td><td>${typeDisplay}</td>`;
+            tableBody.appendChild(row);
+          });
+        })
+        .catch(error => {
+          console.error('打刻履歴取得エラー:', error);
+          document.getElementById("todayRecordsTable").innerHTML = '<tr><td colspan="2" class="text-center">データがありません</td></tr>';
+        });
     });
   
     // 打刻種別を日本語に変換
@@ -212,14 +259,12 @@
         case 'clock_out': return '退勤';
         case 'break_start': return '休憩開始';
         case 'break_end': return '休憩終了';
-        case 'break_duration': return '休憩時間登録';
+        case 'break_duration': return '休憩時間'; // デフォルト表示を変更
         case 'paid_vacation': return '有給休暇';
         default: return type;
       }
     }
   </script>
-  
-  
 
 
   <script>
@@ -255,11 +300,11 @@
       // 5秒後に自動的に消す
       setTimeout(() => {
         alertArea.style.display = 'none';
-      }, 10000);
+      }, 5000);
     }
 
     function fetchEmployees() {
-      showAlert("従業員情報を読み込み中...", "info");
+     
       
       fetch('/api/employees')
         .then(response => {
@@ -283,7 +328,7 @@
           );
           
           if (filteredData.length === 0) {
-            showAlert("表示可能な従業員がいません", "warning");
+            alert("表示可能な従業員がいません");
             return;
           }
           
@@ -311,11 +356,11 @@
             select.add(option);
           });
           
-          showAlert('従業員情報の読み込みが完了しました', 'success');
+          
         })
         .catch(error => {
           console.error('従業員取得エラー:', error);
-          showAlert('従業員情報の取得に失敗しました: ' + error.message, 'danger');
+          alert('従業員情報の取得に失敗しました: ' + error.message);
         });
     }
 
@@ -340,8 +385,19 @@ function updateTodayRecords() {
   if (!selectedValue) {
     return;
   }
-
-  fetch(`/api/todayTimeRecords?empNumber=${selectedValue}`)
+  
+  const selectedOption = select.options[select.selectedIndex];
+  const employeeNumber = selectedOption.dataset.employeeNumber;
+  
+  // 本日の日付を取得
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  const todayStr = `${year}-${month}-${day}`;
+  
+  // まず今日の打刻履歴を取得
+  fetch(`/api/todayTimeRecords?empNumber=${employeeNumber}`)
     .then(response => {
       if (!response.ok) {
         throw new Error('打刻履歴を取得できませんでした');
@@ -349,23 +405,64 @@ function updateTodayRecords() {
       return response.json();
     })
     .then(records => {
+      if (!records || !Array.isArray(records)) {
+        records = [];
+      }
+      
+      // 次に当月の完全な記録を取得して、break_duration情報を補完する
+      return fetch(`/api/timeRecords?empNumber=${employeeNumber}&month=${year}-${month}`)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('休憩時間データを取得できませんでした');
+          }
+          return response.json();
+        })
+        .then(fullRecords => {
+          // 今日の日付のレコードだけフィルタリング
+          const todayFullRecords = fullRecords.filter(rec => rec.target_date === todayStr);
+          
+          // 打刻種別ごとに休憩時間情報をマージ
+          records.forEach(record => {
+            // 対応する完全な記録を見つける
+            const matchingRecord = todayFullRecords.find(
+              rec => rec.target_type === record.target_type && rec.target_time === record.target_time
+            );
+            
+            // 見つかった場合、break_duration情報をコピー
+            if (matchingRecord && matchingRecord.break_duration) {
+              record.break_duration = matchingRecord.break_duration;
+            }
+          });
+          
+          return records;
+        });
+    })
+    .then(records => {
       const tableBody = document.getElementById("todayRecordsTable");
       tableBody.innerHTML = ""; // クリア
 
-      if (!records || records.length === 0) {
+      if (records.length === 0) {
         tableBody.innerHTML = '<tr><td colspan="2" class="text-center">データなし</td></tr>';
         return;
       }
 
       records.forEach(record => {
         const row = document.createElement("tr");
-        row.innerHTML = `<td>${record.target_time}</td><td>${convertRecordType(record.target_type)}</td>`;
+        // 打刻種別のカスタム表示（休憩時間の場合は分数を表示）
+        let typeDisplay = convertRecordType(record.target_type);
+        
+        // break_durationの場合、分数を表示
+        if (record.target_type === 'break_duration' && record.break_duration) {
+          typeDisplay = `休憩時間(${record.break_duration}分)`;
+        }
+        
+        row.innerHTML = `<td>${record.target_time}</td><td>${typeDisplay}</td>`;
         tableBody.appendChild(row);
       });
     })
     .catch(error => {
       console.error('打刻履歴取得エラー:', error);
-      document.getElementById("todayRecordsTable").innerHTML = '<tr><td colspan="2" class="text-center">取得失敗</td></tr>';
+      document.getElementById("todayRecordsTable").innerHTML = '<tr><td colspan="2" class="text-center">データがありません</td></tr>';
     });
 }
 
@@ -373,7 +470,7 @@ function recordImmediate(type) {
   const select = document.getElementById("employeeSelect");
   const selectedValue = select.value;
   if (!selectedValue) {
-    showAlert("従業員を選択してください", "warning");
+    alert("従業員を選択してください");
     return;
   }
 
@@ -393,7 +490,7 @@ function recordImmediate(type) {
     })
     .then(records => {
       if (type === 'break_duration' && records.some(record => record.target_type === 'break_duration')) {
-        showAlert("すでに本日の休憩時間が登録されています", "warning");
+        alert("すでに本日の休憩時間が登録されています");
         return;
       }
 
@@ -419,13 +516,13 @@ function recordImmediate(type) {
         const breakInput = document.getElementById("breakDurationInput");
         const breakDuration = parseInt(breakInput.value);
         if (isNaN(breakDuration) || breakDuration < 1) {
-          showAlert("休憩時間は1分以上の値を入力してください", "warning");
+          alert("休憩時間は1分以上の値を入力してください");
           return;
         }
         record.break_duration = breakDuration;
       }
 
-      showAlert(`"${type}" の記録を処理中...`, "info");
+
 
       return fetch('/api/saveWorkRecord', {
         method: 'POST',
@@ -443,13 +540,13 @@ function recordImmediate(type) {
     })
     .then(data => {
       if (data) {
-        showAlert(`"${type}" の記録が完了しました`, "success");
+        alert(`"${type}" の記録が完了しました`);
         updateTodayRecords(); // 打刻履歴を更新
       }
     })
     .catch(error => {
       console.error('APIエラー:', error);
-      showAlert(`操作に失敗しました: ${error.message}`, "danger");
+      alert(`操作に失敗しました: ${error.message}`);
     });
 }
 
@@ -457,14 +554,14 @@ function handlePaidVacationSubmit(formObject) {
   const select = document.getElementById("employeeSelect");
   const selectedValue = select.value;
   if (!selectedValue) {
-    showAlert("従業員を選択してください", "warning");
+    alert("従業員を選択してください");
     return false;
   }
 
   const selectedOption = select.options[select.selectedIndex];
   const employeeNumber = selectedOption.dataset.employeeNumber;
 
-  showAlert("有給休暇の登録を処理中...", "info");
+ 
 
   fetch(`/api/employeeDetail?empNumber=${employeeNumber}`)
     .then(response => {
@@ -497,13 +594,13 @@ function handlePaidVacationSubmit(formObject) {
     })
     .then(data => {
       if (data) {
-        showAlert("有給休暇の登録に成功しました", "success");
+        alert("有給休暇の登録に成功しました");
         updateTodayRecords(); // 打刻履歴を更新
       }
     })
     .catch(error => {
       console.error('有給API呼び出しエラー:', error);
-      showAlert(`有給休暇登録エラー: ${error.message}`, "danger");
+      alert(`有給休暇登録エラー: ${error.message}`);
     });
 
   return false;
@@ -513,7 +610,7 @@ function saveMessage() {
     const select = document.getElementById("employeeSelect");
     const selectedValue = select.value;
     if (!selectedValue) {
-      showAlert("従業員を選択してください", "warning");
+      alert("従業員を選択してください");
       return;
     }
 
@@ -523,7 +620,7 @@ function saveMessage() {
     const newMessage = messageInput.value.trim();
 
     if (!newMessage) {
-      showAlert("メッセージを入力してください", "warning");
+      alert("メッセージを入力してください");
       return;
     }
 
@@ -558,12 +655,12 @@ function saveMessage() {
         return response.text();
       })
       .then(() => {
-        showAlert("メッセージを保存しました", "success");
+        alert("メッセージを保存しました");
         messageInput.value = "";
       })
       .catch(error => {
         console.error('メモ保存エラー:', error);
-        showAlert(`エラー: ${error.message}`, "danger");
+        alert(`エラー: ${error.message}`);
       });
   }
 

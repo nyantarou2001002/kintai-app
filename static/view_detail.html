@@ -546,9 +546,9 @@
     tr.appendChild(tdWorkTime);
     
     // 休憩時間セル
-    const tdBreakTime = document.createElement("td");
-    tdBreakTime.innerHTML = `<span class="editable-time" data-type="break_duration" data-date="${dateStr}" data-time="00:00" data-employee-id="${currentEmployeeId}" style="cursor: pointer; min-width: 50px; display: inline-block;">&nbsp;</span>`;
-    tr.appendChild(tdBreakTime);
+const tdBreakTime = document.createElement("td");
+tdBreakTime.innerHTML = `<span class="editable-time" data-type="break_duration" data-date="${dateStr}" data-time="00:00" data-employee-id="${currentEmployeeId}" style="cursor: pointer; min-width: 50px; display: inline-block;"><i class="fa-regular fa-square text-muted"></i></span>`;
+tr.appendChild(tdBreakTime);
     
     // 有給休暇セル
     const tdPaidVacation = document.createElement("td");
@@ -827,16 +827,21 @@
             tr.appendChild(tdWorkTime);
             
             // 休憩セル
-            const tdBreakTime = document.createElement("td");
-            let totalBreak = 0;
-            let empIdForBreak = currentEmployeeId;
-            if (groupedRecords[dateStr] && groupedRecords[dateStr].breakTimes.length > 0) {
-              totalBreak = groupedRecords[dateStr].breakTimes.reduce((sum, val) => sum + val, 0);
-              empIdForBreak = groupedRecords[dateStr].employeeId;
-            }
-            const displayValue = totalBreak > 0 ? totalBreak + "分" : "&nbsp;";
-            tdBreakTime.innerHTML = `<span class="editable-time" data-type="break_duration" data-date="${dateStr}" data-time="00:00" data-employee-id="${empIdForBreak}" style="min-width: 50px; display: inline-block;">${displayValue}</span>`;
-            tr.appendChild(tdBreakTime);
+const tdBreakTime = document.createElement("td");
+let totalBreak = 0;
+let empIdForBreak = currentEmployeeId;
+if (groupedRecords[dateStr] && groupedRecords[dateStr].breakTimes.length > 0) {
+  totalBreak = groupedRecords[dateStr].breakTimes.reduce((sum, val) => sum + val, 0);
+  empIdForBreak = groupedRecords[dateStr].employeeId;
+}
+
+// 休憩時間の表示方法を変更 - 値がない場合は四角形アイコンを表示
+if (totalBreak > 0) {
+  tdBreakTime.innerHTML = `<span class="editable-time" data-type="break_duration" data-date="${dateStr}" data-time="00:00" data-employee-id="${empIdForBreak}" style="min-width: 50px; display: inline-block;">${totalBreak}分</span>`;
+} else {
+  tdBreakTime.innerHTML = `<span class="editable-time" data-type="break_duration" data-date="${dateStr}" data-time="00:00" data-employee-id="${empIdForBreak}" style="min-width: 50px; display: inline-block;"><i class="fa-regular fa-square text-muted"></i></span>`;
+}
+tr.appendChild(tdBreakTime);
             
             // 有給休暇セル
 const tdPaidVacation = document.createElement("td");
