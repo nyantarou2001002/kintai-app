@@ -1151,17 +1151,6 @@ func getMonthlySummary(year, month int) ([]MonthlySummary, error) {
 		normalsalary := s.HourlyWage*workhours + int(math.Ceil(float64(s.HourlyWage*workminutes)/60.0))
 		extrasalary := int(math.Ceil(float64(extraHours) / 60.0 * float64(s.HourlyWage) * 0.25))
 		monthlySalary := normalsalary + extrasalary
-		print("workhours")
-		print(workhours)
-		print("workminutes")
-		print(workminutes)
-		print("extraHours")
-		print(extraHours)
-		print("normalsalary")
-		print(normalsalary)
-		print(extrasalary)
-		print("monthlySalary")
-		print(monthlySalary)
 
 		// 交通費を加算
 		monthlySalary += s.TransportationExpense * s.AttendanceDays
