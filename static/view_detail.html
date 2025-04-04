@@ -948,7 +948,7 @@ tr.appendChild(tdPaidVacation);
               ) {
                 alert("削除すべき情報がありません");
               } else {
-                deleteTimeRecord(groupedRecords[dateStr].employeeId, dateStr, "", "");
+                deleteTimeRecord(groupedRecords[dateStr].employeeId, dateStr, "", "",false);
               }
             });
             tdOp.appendChild(delBtn);
@@ -1286,7 +1286,6 @@ tr.appendChild(tdPaidVacation);
   })
   .then(data => {
     if (showConfirm) {
-      alert(data);
     }
     fetchTimeRecords();
   })
