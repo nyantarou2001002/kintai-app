@@ -694,6 +694,8 @@ tr.appendChild(tdBreakTime);
         input.style.width = "85px";
         span.parentNode.replaceChild(input, span);
         input.focus();
+
+        input.select();
         
         input.addEventListener("blur", function() {
           const breakDuration = parseInt(input.value, 10);
@@ -1092,6 +1094,9 @@ tr.appendChild(tdPaidVacation);
                 input.style.width = "100px";
                 span.parentNode.replaceChild(input, span);
                 input.focus();
+                if (type === "break_duration") {
+                  input.select();
+                }
                 input.addEventListener("blur", function() {
                   const newValue = input.value;
                   if (newValue !== trimmedValue) {
