@@ -934,19 +934,21 @@ func updateEmployeeHandler(w http.ResponseWriter, r *http.Request) {
 
 // MonthlySummary 構造体（有給取得日数フィールドを追加）
 // MonthlySummary 構造体（従業員IDフィールド追加）
+// MonthlySummary 構造体（深夜割増分フィールド追加）
 type MonthlySummary struct {
 	EmpID                 int    `json:"emp_id"`
 	EmpNumber             string `json:"emp_number"`
 	EmpName               string `json:"emp_name"`
-	EmploymentType        string `json:"employment_type"` // 追加
+	EmploymentType        string `json:"employment_type"`
 	HourlyWage            int    `json:"hourly_wage"`
 	TransportationExpense int    `json:"transportation_expense"`
 	TotalWorkMin          int    `json:"total_work_min"`
 	TotalNightShiftMin    int    `json:"total_night_shift_min"`
 	AttendanceDays        int    `json:"attendance_days"`
-	HolidayWorkMin        int    `json:"holiday_work_min"` // 固定値例
+	HolidayWorkMin        int    `json:"holiday_work_min"`
 	PaidVacationTaken     int    `json:"paid_vacation_taken"`
-	RemainingPaidVacation int    `json:"remaining_paid_vacation"` // 固定値例
+	RemainingPaidVacation int    `json:"remaining_paid_vacation"`
+	ExtraSalary           int    `json:"extra_salary"` // 追加：深夜割増分
 	MonthlySalary         int    `json:"monthly_salary"`
 	Memo                  string `json:"memo"`
 }
@@ -1151,6 +1153,9 @@ func getMonthlySummary(year, month int) ([]MonthlySummary, error) {
 		normalsalary := s.HourlyWage*workhours + int(math.Ceil(float64(s.HourlyWage*workminutes)/60.0))
 		extrasalary := int(math.Ceil(float64(extraHours) / 60.0 * float64(s.HourlyWage) * 0.25))
 		monthlySalary := normalsalary + extrasalary
+
+		// 深夜割増分を構造体に設定
+		s.ExtraSalary = extrasalary
 
 		// 交通費を加算
 		monthlySalary += s.TransportationExpense * s.AttendanceDays
@@ -1762,7 +1767,8 @@ func exportExcelHandler(w http.ResponseWriter, r *http.Request) {
 	// ※ 月次勤怠レポートシートはそのまま
 	monthlySheet := "月次勤怠レポート"
 	f.NewSheet(monthlySheet)
-	headers := []string{"従業員番号", "従業員名", "時給", "合計勤務時間(分)", "合計夜勤時間(分)", "出勤日数", "交通費往復", "交通費", "月給", "有給取得日数", "メモ"}
+	// ヘッダーに「深夜割増分」を追加
+	headers := []string{"従業員番号", "従業員名", "時給", "合計勤務時間(分)", "合計夜勤時間(分)", "深夜割増分", "出勤日数", "交通費往復", "交通費", "月給", "有給取得日数", "メモ"}
 	for i, h := range headers {
 		cell, _ := excelize.ColumnNumberToName(i + 1)
 		cell = fmt.Sprintf("%s1", cell)
@@ -1779,12 +1785,13 @@ func exportExcelHandler(w http.ResponseWriter, r *http.Request) {
 		f.SetCellValue(monthlySheet, fmt.Sprintf("C%d", rowIndex), ms.HourlyWage)
 		f.SetCellValue(monthlySheet, fmt.Sprintf("D%d", rowIndex), ms.TotalWorkMin)
 		f.SetCellValue(monthlySheet, fmt.Sprintf("E%d", rowIndex), ms.TotalNightShiftMin)
-		f.SetCellValue(monthlySheet, fmt.Sprintf("F%d", rowIndex), ms.AttendanceDays)
-		f.SetCellValue(monthlySheet, fmt.Sprintf("G%d", rowIndex), ms.TransportationExpense)
-		f.SetCellValue(monthlySheet, fmt.Sprintf("H%d", rowIndex), ms.TransportationExpense*ms.AttendanceDays)
-		f.SetCellValue(monthlySheet, fmt.Sprintf("I%d", rowIndex), ms.MonthlySalary)
-		f.SetCellValue(monthlySheet, fmt.Sprintf("J%d", rowIndex), ms.PaidVacationTaken)
-		f.SetCellValue(monthlySheet, fmt.Sprintf("K%d", rowIndex), ms.Memo)
+		f.SetCellValue(monthlySheet, fmt.Sprintf("F%d", rowIndex), ms.ExtraSalary) // 深夜割増分を追加
+		f.SetCellValue(monthlySheet, fmt.Sprintf("G%d", rowIndex), ms.AttendanceDays)
+		f.SetCellValue(monthlySheet, fmt.Sprintf("H%d", rowIndex), ms.TransportationExpense)
+		f.SetCellValue(monthlySheet, fmt.Sprintf("I%d", rowIndex), ms.TransportationExpense*ms.AttendanceDays)
+		f.SetCellValue(monthlySheet, fmt.Sprintf("J%d", rowIndex), ms.MonthlySalary)
+		f.SetCellValue(monthlySheet, fmt.Sprintf("K%d", rowIndex), ms.PaidVacationTaken)
+		f.SetCellValue(monthlySheet, fmt.Sprintf("L%d", rowIndex), ms.Memo)
 		rowIndex++
 	}
 

@@ -119,7 +119,7 @@
       <!-- 月次勤怠レポート -->
       <div id="monthlyReport" class="tab-pane fade show active">
         <div class="mb-5">
-          <table class="table table-bordered table-striped">
+          <table id="monthlySummaryTable" class="table table-bordered table-striped">
             <thead>
               <tr>
                 <th>従業員ID</th>
@@ -204,6 +204,16 @@
         .then(data => {
           const tableBody = document.getElementById('monthlySummaryTableBody');
           tableBody.innerHTML = "";
+          // テーブルヘッダーを更新 - 修正部分
+      const table = tableBody.closest('table');
+      const headerRow = table.querySelector('thead tr');
+      // ヘッダーに深夜割増分の列がなければ追加
+      if (!headerRow.innerHTML.includes('深夜割増分')) {
+        const nightShiftHeader = headerRow.querySelector('th:nth-child(5)');
+        const newHeader = document.createElement('th');
+        newHeader.textContent = '深夜割増分';
+        nightShiftHeader.insertAdjacentElement('afterend', newHeader);
+      }
           if (!data || data.length === 0) {
             tableBody.innerHTML = `<tr><td colspan="11" class="text-center">情報がありません</td></tr>`;
             return;
@@ -236,11 +246,12 @@
               <td>${item.hourly_wage !== null ? item.hourly_wage + "円" : ''}</td>
               <td>${item.workTimeFormatted || ''}</td>
               <td>${item.nightTimeFormatted || ''}</td>
+              <td>${item.extra_salary !== null ? item.extra_salary + "円" : ''}</td>
               <td>${item.attendance_days !== null ? item.attendance_days + "日" : ''}</td>
               <td>${transportationRoundTrip}円</td>
               <td>${transportationCost}円</td>
-              <td>${item.monthly_salary !== null ? item.monthly_salary + "円" : ''}</td> <!-- 位置を変更 -->
-              <td>${item.paid_vacation_taken || 0}日</td> <!-- 位置を変更 -->
+              <td>${item.monthly_salary !== null ? item.monthly_salary + "円" : ''}</td>
+              <td>${item.paid_vacation_taken || 0}日</td>
               <td>${memoInput}</td>
             `;
             tableBody.appendChild(tr);
