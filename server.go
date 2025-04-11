@@ -1931,9 +1931,9 @@ func calculateWorkMinutes(clockIn, clockOut string) int {
 // 職種更新API
 // デバッグ用：職種更新API
 // 職種更新API（デバッグ用ログ付き・変更がない場合も正常終了とする）
+// 職種更新API（従業員テーブルの職種名も一緒に更新）
 func updateJobTypeHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("updateJobTypeHandler: Request received.")
-	log.Printf("Request URL: %s, Method: %s\n", r.URL.String(), r.Method)
 
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -1953,30 +1953,65 @@ func updateJobTypeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("updateJobTypeHandler: Received payload: %+v\n", req)
 
-	query := "UPDATE job_types SET name = ? WHERE code = ?"
-	log.Printf("updateJobTypeHandler: Executing query: %s with params: name=%s, code=%s\n", query, req.Name, req.Code)
-	result, err := db.Exec(query, req.Name, req.Code)
+	// トランザクション開始
+	tx, err := db.Begin()
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
-		log.Println("updateJobTypeHandler: Database error:", err)
+		log.Println("updateJobTypeHandler: Error starting transaction:", err)
+		return
+	}
+
+	// job_typesテーブルを更新
+	jobTypeQuery := "UPDATE job_types SET name = ? WHERE code = ?"
+	log.Printf("updateJobTypeHandler: Executing query: %s with params: name=%s, code=%s\n", jobTypeQuery, req.Name, req.Code)
+
+	result, err := tx.Exec(jobTypeQuery, req.Name, req.Code)
+	if err != nil {
+		tx.Rollback()
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Println("updateJobTypeHandler: Database error updating job_types:", err)
 		return
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
+		tx.Rollback()
 		http.Error(w, "Error fetching update result", http.StatusInternalServerError)
 		log.Println("updateJobTypeHandler: Error fetching rows affected:", err)
 		return
 	}
-	log.Printf("updateJobTypeHandler: Rows affected: %d\n", rowsAffected)
+	log.Printf("updateJobTypeHandler: Rows affected in job_types: %d\n", rowsAffected)
 
-	// 更新前と同じ値の場合 rowsAffected は 0 になるため、これはエラーではなく正常終了とする
-	if rowsAffected == 0 {
-		log.Println("updateJobTypeHandler: No rows updated. (可能性：更新値が既存の値と同じ)")
-		// ここではエラーを返さず、成功としてレスポンスを返す
-	} else {
-		log.Printf("updateJobTypeHandler: Successfully updated job type: %+v\n", req)
+	// 対応する従業員テーブルのjobカラムも更新
+	empQuery := "UPDATE employees SET job = ? WHERE job_code = ?"
+	log.Printf("updateJobTypeHandler: Executing query: %s with params: name=%s, code=%s\n", empQuery, req.Name, req.Code)
+
+	empResult, err := tx.Exec(empQuery, req.Name, req.Code)
+	if err != nil {
+		tx.Rollback()
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Println("updateJobTypeHandler: Database error updating employees:", err)
+		return
 	}
+
+	empRowsAffected, err := empResult.RowsAffected()
+	if err != nil {
+		tx.Rollback()
+		http.Error(w, "Error fetching employee update result", http.StatusInternalServerError)
+		log.Println("updateJobTypeHandler: Error fetching employee rows affected:", err)
+		return
+	}
+	log.Printf("updateJobTypeHandler: Rows affected in employees: %d\n", empRowsAffected)
+
+	// トランザクションをコミット
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Println("updateJobTypeHandler: Error committing transaction:", err)
+		return
+	}
+
+	log.Printf("updateJobTypeHandler: Successfully updated job_types and employees tables. Job type code: %s, new name: %s, employees updated: %d\n",
+		req.Code, req.Name, empRowsAffected)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(req)
