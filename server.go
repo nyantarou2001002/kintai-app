@@ -1774,6 +1774,10 @@ func exportExcelHandler(w http.ResponseWriter, r *http.Request) {
 		cell = fmt.Sprintf("%s1", cell)
 		f.SetCellValue(monthlySheet, cell, h)
 	}
+
+	// 合計用の変数
+	var totalMonthlySalary int
+
 	rowIndex := 2
 	for _, ms := range monthlySummaries {
 		// 従業員番号が "ZY" または "ZZ" で始まる場合はスキップする
@@ -1792,8 +1796,22 @@ func exportExcelHandler(w http.ResponseWriter, r *http.Request) {
 		f.SetCellValue(monthlySheet, fmt.Sprintf("J%d", rowIndex), ms.MonthlySalary)
 		f.SetCellValue(monthlySheet, fmt.Sprintf("K%d", rowIndex), ms.PaidVacationTaken)
 		f.SetCellValue(monthlySheet, fmt.Sprintf("L%d", rowIndex), ms.Memo)
+
+		// 月給の合計を計算
+		totalMonthlySalary += ms.MonthlySalary
+
 		rowIndex++
 	}
+
+	// 合計行を追加
+	f.SetCellValue(monthlySheet, fmt.Sprintf("A%d", rowIndex), "合計")
+	f.SetCellValue(monthlySheet, fmt.Sprintf("J%d", rowIndex), totalMonthlySalary)
+
+	// セルのスタイル設定：合計行を太字に
+	style, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true},
+	})
+	f.SetCellStyle(monthlySheet, fmt.Sprintf("A%d", rowIndex), fmt.Sprintf("L%d", rowIndex), style)
 
 	// --- パート従業員カレンダーシート（横配置：1列空けて10人ずつ） ---
 	calendarSheet := "パート従業員カレンダー"

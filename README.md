@@ -95,11 +95,3 @@
 | break_duration | int                                                                                     | YES  |     | NULL    |                |
 
 ---
-
-## `select * from system_config;`
-
-
-| id | owner_email            | owner_password                                               | secret_answer | secret_answer_hash                                           |
-|----|------------------------|--------------------------------------------------------------|----------------|--------------------------------------------------------------|
-| 1  | nyaruko65005@gmail.com | $2a$10$1miiBUhjNVtgFXHzYt3daeeyZe9oL0ESOv7NB7uAt6Gmi2QYS9e6y | stroll         | $2a$10$JE006Idg4n5TJ5Us7Yqqou.fK8HSdHT4N8ljv04TDpE2HwKKewcty |
-
